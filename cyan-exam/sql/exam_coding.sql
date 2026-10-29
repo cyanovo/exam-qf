@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS exam_code_submission (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  exam_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  question_id BIGINT NOT NULL,
+  mode VARCHAR(12) NOT NULL,
+  idem_key VARCHAR(64) NOT NULL,
+  source MEDIUMTEXT NOT NULL,
+  source_hash CHAR(64) NOT NULL,
+  snapshot_hash CHAR(64) NOT NULL,
+  state VARCHAR(16) NOT NULL DEFAULT 'QUEUED',
+  score INT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  lease_token CHAR(36) NULL,
+  lease_until DATETIME(3) NULL,
+  progress MEDIUMTEXT NULL,
+  feedback MEDIUMTEXT NULL,
+  received_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  completed_at DATETIME(3) NULL,
+  UNIQUE KEY uk_code_idem(exam_id,user_id,idem_key),
+  KEY ix_code_queue(state,lease_until,id),
+  KEY ix_code_latest(exam_id,user_id,question_id,mode,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

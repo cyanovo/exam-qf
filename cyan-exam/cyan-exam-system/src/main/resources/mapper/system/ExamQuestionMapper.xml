@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cyan.exam.system.mapper.ExamQuestionMapper">
+
+    <insert id="batchInsertExamQuestion">
+        INSERT INTO exam_question (exam_id, question_id, sort) VALUES
+        <foreach collection="questionIds" item="questionId" separator=",">
+            (#{examId}, #{questionId}, 0)
+        </foreach>
+    </insert>
+
+    <delete id="deleteExamQuestionByExamId" parameterType="Long">
+        DELETE FROM exam_question WHERE exam_id = #{examId}
+    </delete>
+
+    <select id="selectQuestionIdsByExamId" parameterType="Long" resultType="Long">
+        SELECT question_id FROM exam_question WHERE exam_id = #{examId} ORDER BY sort, question_id
+    </select>
+    <select id="selectAssignedQuestions" parameterType="Long" resultType="com.cyan.exam.system.domain.CyanQuestion">
+        SELECT question_id AS questionId, points AS maxScore
+        FROM exam_question WHERE exam_id = #{examId} ORDER BY sort, question_id
+    </select>
+    <update id="updatePoints">
+        UPDATE exam_question SET points = #{points}
+        WHERE exam_id = #{examId} AND question_id = #{questionId}
+    </update>
+    <insert id="insertSnapshots">
+        INSERT INTO exam_question_snapshot
+          (exam_id, question_id, sort, category, difficulty, question_type, title, sub_title, answer, max_score)
+        VALUES
+        <foreach collection="questions" item="q" index="position" separator=",">
+          (#{examId}, #{q.questionId}, #{position}, #{q.category}, #{q.difficulty},
+           #{q.questionType}, #{q.title}, #{q.subTitle}, #{q.answer}, #{q.maxScore})
+        </foreach>
+    </insert>
+    <select id="selectSnapshots" parameterType="Long" resultType="com.cyan.exam.system.domain.CyanQuestion">
+        SELECT question_id AS questionId, category, difficulty, question_type AS questionType,
+               title, sub_title AS subTitle, answer, max_score AS maxScore
+        FROM exam_question_snapshot WHERE exam_id = #{examId} ORDER BY sort, question_id
+    </select>
+    <select id="containsSnapshot" resultType="int">
+        SELECT count(*) FROM exam_question_snapshot
+        WHERE exam_id = #{examId} AND question_id = #{questionId}
+    </select>
+
+</mapper>

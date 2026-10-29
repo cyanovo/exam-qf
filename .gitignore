@@ -1,0 +1,26 @@
+# Local dependencies, build outputs and runtime data.
+**/node_modules/
+**/target/
+**/dist/
+**/coverage/
+**/test-results/
+**/playwright-report/
+*.log
+*.pid
+*.rdb
+*.aof
+/Redis-x64-5.0.14.1/
+
+# Machine-specific credentials stay on this machine.
+/cyan-exam/cyan-exam-admin/src/main/resources/application.yml
+/cyan-exam/cyan-exam-admin/src/main/resources/application-druid.yml
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Editor and operating-system files.
+.idea/
+.vscode/
+Thumbs.db
+.DS_Store

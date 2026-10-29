@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cyan.exam.system.mapper.ExamSessionMapper">
+    <resultMap id="session" type="ExamSession">
+        <id property="sessionId" column="session_id"/>
+        <result property="examId" column="exam_id"/>
+        <result property="userId" column="user_id"/>
+        <result property="startedAt" column="started_at"/>
+        <result property="submittedAt" column="submitted_at"/>
+        <result property="status" column="status"/>
+    </resultMap>
+    <sql id="columns">session_id, exam_id, user_id, started_at, submitted_at, status</sql>
+    <select id="selectByExamAndUser" resultMap="session">
+        SELECT <include refid="columns"/> FROM exam_session
+        WHERE exam_id = #{examId} AND user_id = #{userId}
+    </select>
+    <select id="lockByExamAndUser" resultMap="session">
+        SELECT <include refid="columns"/> FROM exam_session
+        WHERE exam_id = #{examId} AND user_id = #{userId} FOR UPDATE
+    </select>
+    <insert id="createIfAbsent">
+        INSERT IGNORE INTO exam_session (exam_id, user_id, started_at, status)
+        SELECT e.exam_id, s.user_id, NOW(), 'IN_PROGRESS'
+        FROM exam_info e JOIN exam_student s ON s.exam_id = e.exam_id
+        WHERE e.exam_id = #{examId} AND s.user_id = #{userId}
+          AND e.status = '0' AND e.published_at IS NOT NULL
+          AND e.start_time &lt;= NOW() AND e.end_time &gt; NOW()
+    </insert>
+    <update id="finish">
+        UPDATE exam_session SET status = #{status}, submitted_at = NOW()
+        WHERE session_id = #{sessionId} AND status = 'IN_PROGRESS'
+    </update>
+    <select id="selectPendingAutoGrades" resultMap="session">
+        SELECT sess.* FROM exam_session sess
+        WHERE sess.session_id &gt; #{afterId}
+          AND sess.status IN ('SUBMITTED', 'AUTO_SUBMITTED', 'GRADED')
+          AND EXISTS (
+            SELECT 1 FROM exam_question_snapshot q
+            LEFT JOIN exam_answer_record a ON a.exam_id = q.exam_id
+              AND a.question_id = q.question_id AND a.user_id = sess.user_id
+            WHERE q.exam_id = sess.exam_id AND
+              (a.record_id IS NULL OR (a.graded_at IS NULL AND
+                (a.answer IS NULL OR a.answer REGEXP '^[[:space:]]*$'
+                 OR q.question_type IN ('SINGLE_CHOICE', 'MULTI_CHOICE', 'JUDGE', 'PYTHON'))))
+          )
+        ORDER BY sess.session_id LIMIT 100
+    </select>
+    <update id="autoFinishExpired">
+        UPDATE exam_session sess JOIN exam_info e ON e.exam_id = sess.exam_id
+        SET sess.status = 'AUTO_SUBMITTED', sess.submitted_at = e.end_time
+        WHERE sess.status = 'IN_PROGRESS' AND e.end_time &lt;= NOW()
+    </update>
+</mapper>

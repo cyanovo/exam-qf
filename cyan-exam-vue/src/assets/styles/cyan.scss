@@ -1,0 +1,134 @@
+/* 考试系统 iOS 风格主题 */
+
+// ======== Element Plus 变量覆盖 ========
+:root {
+  // 主色：深青绿色，用于按钮、链接、重点交互元素
+  --el-color-primary: #00897b;
+  --el-color-primary-light-3: #26a69a;
+  --el-color-primary-light-5: #4db6ac;
+  --el-color-primary-light-7: #80cbc4;
+  --el-color-primary-light-8: #b2dfdb;
+  --el-color-primary-light-9: #e0f2f1;
+  --el-color-primary-dark-2: #00796b;
+  
+  // 文字颜色保持深色，确保对比度
+  --el-text-color-primary: #303133;
+  --el-text-color-regular: #606266;
+  --el-text-color-secondary: #909399;
+  --el-text-color-placeholder: #a8abb2;
+  
+  // 圆角统一大圆角
+  --el-border-radius-base: 16px;
+  --el-border-radius-small: 10px;
+  --el-border-radius-round: 30px;
+  
+  // 阴影
+  --el-box-shadow-light: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --el-box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+// ======== 全局装饰性元素应用毛玻璃和浅青背景 ========
+// 侧边栏样式由 sidebar.scss 统一管理，此处不再重复声明
+
+// 卡片
+.el-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(15px);
+  -webkit-backdrop-filter: blur(15px);
+  border-radius: 20px;
+  border: 1px solid rgba(0, 137, 123, 0.1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.03);
+}
+
+// 对话框 (Modal)
+.el-dialog {
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.15);
+}
+.el-message-box {
+  border-radius: 20px;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+// 表格圆角与表头颜色
+.el-table {
+  border-radius: 16px;
+  overflow: hidden;
+}
+.el-table th.el-table__cell {
+  background-color: #e0f2f1 !important; // 浅青表头
+  color: #00695c !important;            // 深色文字
+  font-weight: 600;
+}
+
+// 分页组件优化
+.el-pagination .el-button,
+.el-pagination .el-input__inner {
+  border-radius: 10px;
+}
+
+// 输入框圆角
+.el-input__inner {
+  border-radius: 12px;
+}
+
+// 按钮微调
+.el-button {
+  border-radius: 12px;
+  font-weight: 500;
+}
+// 主按钮文字强制白色（确保对比度）
+.el-button--primary {
+  color: #ffffff;
+  &:hover {
+    background-color: #00796b;
+    border-color: #00796b;
+  }
+}
+
+// 标签页
+.el-tabs__header {
+  border-bottom: 1px solid rgba(0,137,123,0.15);
+}
+.el-tabs__item.is-active {
+  color: #00897b;
+}
+
+// 下拉菜单
+.el-dropdown-menu {
+  border-radius: 12px;
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+// 提示气泡
+.el-tooltip__popper,
+.el-popover {
+  border-radius: 12px;
+  backdrop-filter: blur(5px);
+  -webkit-backdrop-filter: blur(5px);
+}
+
+// 导航菜单选中态
+.el-menu-item.is-active {
+  background-color: rgba(0,137,123,0.1) !important;
+  color: #00897b !important;
+}
+
+// 滚动条美化（可选）
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0,137,123,0.3);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

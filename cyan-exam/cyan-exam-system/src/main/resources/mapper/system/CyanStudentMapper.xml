@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+"http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cyan.exam.system.mapper.CyanStudentMapper">
+    
+    <resultMap type="CyanStudent" id="CyanStudentResult">
+        <result property="studentId"    column="student_id"    />
+        <result property="userId"    column="user_id"    />
+        <result property="studentNo"    column="student_no"    />
+        <result property="className"    column="class_name"    />
+        <result property="grade"    column="grade"    />
+        <result property="userName"    column="user_name"    />
+        <result property="nickName"    column="nick_name"    />
+        <result property="status"    column="status"    />
+        <result property="createBy"    column="create_by"    />
+        <result property="createTime"    column="create_time"    />
+        <result property="updateBy"    column="update_by"    />
+        <result property="updateTime"    column="update_time"    />
+        <result property="remark"    column="remark"    />
+    </resultMap>
+
+    <sql id="selectCyanStudentVo">
+        SELECT s.student_id, s.user_id, s.student_no, s.class_name, s.grade,
+        u.user_name, u.nick_name, u.status, s.create_time
+        FROM cyan_student s
+        LEFT JOIN sys_user u ON s.user_id = u.user_id
+        LEFT JOIN sys_user_role ur ON u.user_id = ur.user_id
+        LEFT JOIN sys_role r ON ur.role_id = r.role_id
+        WHERE r.role_key = 'student'
+    </sql>
+
+    <select id="selectCyanStudentList" parameterType="CyanStudent" resultMap="CyanStudentResult">
+        <include refid="selectCyanStudentVo"/>
+        <if test="studentNo != null and studentNo != ''">
+            AND s.student_no LIKE CONCAT('%', #{studentNo}, '%')
+        </if>
+        <if test="className != null and className != ''">
+            AND s.class_name LIKE CONCAT('%', #{className}, '%')
+        </if>
+        <if test="userName != null and userName != ''">
+            AND u.user_name LIKE CONCAT('%', #{userName}, '%')
+        </if>
+        ${params.dataScope}
+    </select>
+
+    <select id="selectCyanStudentByStudentId" parameterType="Long" resultMap="CyanStudentResult">
+        SELECT s.student_id, s.user_id, s.student_no, s.class_name, s.grade,
+               u.user_name, u.nick_name, u.status, s.create_time
+        FROM cyan_student s
+                 LEFT JOIN sys_user u ON s.user_id = u.user_id
+        WHERE s.student_id = #{studentId}
+    </select>
+
+
+
+    <insert id="insertCyanStudent" parameterType="CyanStudent" useGeneratedKeys="true" keyProperty="studentId">
+        insert into cyan_student
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            <if test="userId != null">user_id,</if>
+            <if test="studentNo != null and studentNo != ''">student_no,</if>
+            <if test="className != null">class_name,</if>
+            <if test="grade != null">grade,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+            <if test="updateBy != null">update_by,</if>
+            <if test="updateTime != null">update_time,</if>
+            <if test="remark != null">remark,</if>
+         </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            <if test="userId != null">#{userId},</if>
+            <if test="studentNo != null and studentNo != ''">#{studentNo},</if>
+            <if test="className != null">#{className},</if>
+            <if test="grade != null">#{grade},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+            <if test="updateBy != null">#{updateBy},</if>
+            <if test="updateTime != null">#{updateTime},</if>
+            <if test="remark != null">#{remark},</if>
+         </trim>
+    </insert>
+
+    <update id="updateCyanStudent" parameterType="CyanStudent">
+        update cyan_student
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="userId != null">user_id = #{userId},</if>
+            <if test="studentNo != null and studentNo != ''">student_no = #{studentNo},</if>
+            <if test="className != null">class_name = #{className},</if>
+            <if test="grade != null">grade = #{grade},</if>
+            <if test="createBy != null">create_by = #{createBy},</if>
+            <if test="createTime != null">create_time = #{createTime},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+            <if test="remark != null">remark = #{remark},</if>
+        </trim>
+        where student_id = #{studentId}
+    </update>
+
+    <delete id="deleteCyanStudentByStudentId" parameterType="Long">
+        delete from cyan_student where student_id = #{studentId}
+    </delete>
+
+
+    <delete id="deleteCyanStudentByStudentIds" parameterType="String">
+        delete from cyan_student where student_id in
+        <foreach item="studentId" collection="array" open="(" separator="," close=")">
+            #{studentId}
+        </foreach>
+    </delete>
+</mapper>

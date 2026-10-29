@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cyan.exam.system.mapper.CyanExamInfoMapper">
+
+    <resultMap type="CyanExamInfo" id="CyanExamInfoResult">
+        <result property="examId"     column="exam_id"     />
+        <result property="ownerUserId" column="owner_user_id" />
+        <result property="examName"   column="exam_name"   />
+        <result property="startTime"  column="start_time"  />
+        <result property="endTime"    column="end_time"    />
+        <result property="status"     column="status"      />
+        <result property="publishedAt" column="published_at" />
+        <result property="createBy"   column="create_by"   />
+        <result property="createTime" column="create_time" />
+        <result property="updateBy"   column="update_by"   />
+        <result property="updateTime" column="update_time" />
+        <result property="remark"     column="remark"      />
+    </resultMap>
+
+    <sql id="selectCyanExamInfoVo">
+        select exam_id, owner_user_id, exam_name, start_time, end_time, status, published_at,
+               create_by, create_time, update_by, update_time, remark
+        from exam_info
+    </sql>
+
+    <select id="selectCyanExamInfoList" parameterType="CyanExamInfo" resultMap="CyanExamInfoResult">
+        <include refid="selectCyanExamInfoVo"/>
+        <where>
+            <if test="ownerUserId != null">
+                AND owner_user_id = #{ownerUserId}
+            </if>
+            <if test="examName != null and examName != ''">
+                AND exam_name LIKE CONCAT('%', #{examName}, '%')
+            </if>
+            <if test="startTime != null">
+                AND start_time &gt;= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND end_time &lt;= #{endTime}
+            </if>
+            <if test="status != null and status != ''">
+                AND status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectCyanExamInfoByExamId" parameterType="Long" resultMap="CyanExamInfoResult">
+        <include refid="selectCyanExamInfoVo"/>
+        where exam_id = #{examId}
+    </select>
+    <select id="lockByExamId" parameterType="Long" resultMap="CyanExamInfoResult">
+        <include refid="selectCyanExamInfoVo"/>
+        where exam_id = #{examId} for update
+    </select>
+    <update id="publish" parameterType="Long">
+        update exam_info set published_at = now() where exam_id = #{examId} and published_at is null
+    </update>
+
+    <insert id="insertCyanExamInfo" parameterType="CyanExamInfo" useGeneratedKeys="true" keyProperty="examId">
+        insert into exam_info
+        <trim prefix="(" suffix=")" suffixOverrides=",">
+            owner_user_id,
+            <if test="examName != null and examName != ''">exam_name,</if>
+            <if test="startTime != null">start_time,</if>
+            <if test="endTime != null">end_time,</if>
+            <if test="status != null and status != ''">status,</if>
+            <if test="remark != null">remark,</if>
+            <if test="createBy != null">create_by,</if>
+            <if test="createTime != null">create_time,</if>
+        </trim>
+        <trim prefix="values (" suffix=")" suffixOverrides=",">
+            #{ownerUserId},
+            <if test="examName != null and examName != ''">#{examName},</if>
+            <if test="startTime != null">#{startTime},</if>
+            <if test="endTime != null">#{endTime},</if>
+            <if test="status != null and status != ''">#{status},</if>
+            <if test="remark != null">#{remark},</if>
+            <if test="createBy != null">#{createBy},</if>
+            <if test="createTime != null">#{createTime},</if>
+        </trim>
+    </insert>
+
+    <update id="updateCyanExamInfo" parameterType="CyanExamInfo">
+        update exam_info
+        <trim prefix="SET" suffixOverrides=",">
+            <if test="examName != null and examName != ''">exam_name = #{examName},</if>
+            <if test="startTime != null">start_time = #{startTime},</if>
+            <if test="endTime != null">end_time = #{endTime},</if>
+            <if test="status != null and status != ''">status = #{status},</if>
+            <if test="remark != null">remark = #{remark},</if>
+            <if test="updateBy != null">update_by = #{updateBy},</if>
+            <if test="updateTime != null">update_time = #{updateTime},</if>
+        </trim>
+        where exam_id = #{examId}
+    </update>
+
+    <delete id="deleteCyanExamInfoByExamId" parameterType="Long">
+        delete from exam_info where exam_id = #{examId}
+    </delete>
+
+    <delete id="deleteCyanExamInfoByExamIds" parameterType="String">
+        delete from exam_info where exam_id in
+        <foreach item="examId" collection="array" open="(" separator="," close=")">
+            #{examId}
+        </foreach>
+    </delete>
+
+</mapper>
