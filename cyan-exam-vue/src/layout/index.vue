@@ -1,26 +1,29 @@
 <template>
-  <div :class="classObj" class="app-wrapper" :style="{ '--current-color': theme, '--current-color-light': theme + '1a', '--current-color-dark-bg': theme + '33' }">
-    <div v-if="device === 'mobile' && sidebar.opened" class="drawer-bg" @click="handleClickOutside"/>
-    <sidebar v-if="!sidebar.hide" class="sidebar-container" />
-    <div :class="{ hasTagsView: needTagsView, sidebarHide: sidebar.hide }" class="main-container">
+  <div :class="[classObj, { 'student-layout': isStudent }]" class="app-wrapper" :style="{ '--current-color': theme, '--current-color-light': theme + '1a', '--current-color-dark-bg': theme + '33' }">
+    <div v-if="!isStudent && device === 'mobile' && sidebar.opened" class="drawer-bg" @click="handleClickOutside"/>
+    <sidebar v-if="!isStudent && !sidebar.hide" class="sidebar-container" />
+    <div :class="{ hasTagsView: !isStudent && needTagsView, sidebarHide: sidebar.hide || isStudent }" class="main-container">
       <div :class="{ 'fixed-header': fixedHeader }">
         <navbar @setLayout="setLayout" />
-        <tags-view v-if="needTagsView" />
+        <tags-view v-if="!isStudent && needTagsView" />
       </div>
       <app-main />
-      <settings ref="settingRef" />
+      <settings v-if="!isStudent" ref="settingRef" />
     </div>
   </div>
 </template>
 
 <script setup>
+import { isStudentOnly } from '@/utils/examIdentity'
 import { useWindowSize } from '@vueuse/core'
 import Sidebar from './components/Sidebar/index.vue'
 import { AppMain, Navbar, Settings, TagsView } from './components'
 import useAppStore from '@/store/modules/app'
 import useSettingsStore from '@/store/modules/settings'
+import useUserStore from '@/store/modules/user'
 
 const settingsStore = useSettingsStore()
+const isStudent = computed(() => isStudentOnly(useUserStore()))
 const theme = computed(() => settingsStore.theme)
 const sidebar = computed(() => useAppStore().sidebar)
 const device = computed(() => useAppStore().device)
@@ -100,7 +103,11 @@ $sidebar-collapsed-width: 64px;                       // Element Plus el-menu �
 }
 
 // 侧边栏完全隐藏时
-.sidebarHide .main-container {
+.main-container.sidebarHide {
+  margin-left: 0;
+}
+
+.student-layout .main-container {
   margin-left: 0;
 }
 
@@ -124,6 +131,10 @@ $sidebar-collapsed-width: 64px;                       // Element Plus el-menu �
   z-index: 999;
 }
 
+.mobile.openSidebar > .sidebar-container {
+  width: min(260px, 85vw);
+}
+
 // ==================== 固定头部（navbar + tagsView） ====================
 .fixed-header {
   position: fixed;
@@ -139,6 +150,10 @@ $sidebar-collapsed-width: 64px;                       // Element Plus el-menu �
 }
 
 .sidebarHide .fixed-header {
+  width: 100%;
+}
+
+.student-layout .fixed-header {
   width: 100%;
 }
 

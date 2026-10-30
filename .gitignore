@@ -18,6 +18,10 @@
 .env.*.local
 *.pem
 *.key
+/releases/
+/.runtime-release/
+/deploy/windows/config.local.json
+/docs/private/
 
 # Editor and operating-system files.
 .idea/

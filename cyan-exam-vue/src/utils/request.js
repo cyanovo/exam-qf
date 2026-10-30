@@ -82,6 +82,11 @@ service.interceptors.response.use(res => {
     if (res.request.responseType ===  'blob' || res.request.responseType ===  'arraybuffer') {
       return res.data
     }
+    if (code === 428) {
+      useUserStore().mustChangePassword = true
+      if (location.pathname !== '/change-password') location.assign('/change-password')
+      return Promise.reject(new Error(msg))
+    }
     if (code === 401) {
       if (!isRelogin.show) {
         isRelogin.show = true

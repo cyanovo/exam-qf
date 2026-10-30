@@ -6,6 +6,8 @@ import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.stream.Collectors;
 import com.alibaba.fastjson.JSON;
 import com.cyan.exam.common.exception.ServiceException;
@@ -37,10 +39,15 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     private CyanQuestionMapper questionMapper;
     @Autowired
     private ExamAccessScope accessScope;
+    @Autowired
+    private com.cyan.exam.system.mapper.OnsiteMapper onsiteMapper;
+    @Autowired
+    private com.cyan.exam.system.service.ExamManagementService management;
 
     private CyanExamInfo lockEditable(Long examId) {
         CyanExamInfo exam = cyanExamInfoMapper.lockByExamId(examId);
         accessScope.requireAccess(exam);
+        if (!"ACTIVE".equals(exam.getLifecycle())) throw new ServiceException("场次已终止或归档");
         if (exam.getPublishedAt() != null || exam.getStartTime() != null
                 && !new Date().before(exam.getStartTime())) {
             throw new ServiceException("考试已发布或已开始，不能修改");
@@ -59,12 +66,16 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
             throw new ServiceException("请设置有效的未来考试时间并启用考试");
         }
         List<CyanQuestion> assigned = examQuestionMapper.selectAssignedQuestions(examId);
+        var tasks = onsiteMapper.tasks(examId);
+        management.validateEntries(examId, com.cyan.exam.system.service.ExamPolicy.read(exam), true);
+        if (examStudentMapper.selectUserIdsByExamId(examId).isEmpty())
+            throw new ServiceException("请先配置考生名单");
         List<Long> ids = assigned.stream().map(CyanQuestion::getQuestionId).collect(Collectors.toList());
-        if (ids == null || ids.isEmpty() || ids.stream().anyMatch(id -> id == null)
+        if ((ids.isEmpty() && tasks.isEmpty()) || ids.stream().anyMatch(id -> id == null)
                 || ids.stream().distinct().count() != ids.size()) {
             throw new ServiceException("发布前请配置有效题目");
         }
-        List<CyanQuestion> source = questionMapper.selectCyanQuestionByQuestionIds(ids.toArray(new Long[0]));
+        List<CyanQuestion> source = ids.isEmpty() ? List.of() : questionMapper.selectCyanQuestionByQuestionIds(ids.toArray(new Long[0]));
         if (source == null || source.size() != ids.size()) {
             throw new ServiceException("部分题目已从题库删除");
         }
@@ -77,6 +88,8 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
                 throw new ServiceException("题目满分必须在 1 到 100 分之间：" + id);
             }
             CyanQuestion q = byId.get(id);
+            if (q != null && !"PUBLISHED".equals(q.getReviewState()))
+                throw new ServiceException("题目尚未审核发布，请在题库完成审核：" + id);
             if (q == null || !"0".equals(q.getStatus()) || q.getTitle() == null
                     || q.getTitle().isBlank() || q.getQuestionType() == null
                     || q.getQuestionType().isBlank() || q.getAnswer() == null || q.getAnswer().isBlank()) {
@@ -94,18 +107,30 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
                     throw new ServiceException("题目选项格式无效：" + id);
                 }
             } else if ("PYTHON".equals(q.getQuestionType())) {
-                com.cyan.exam.system.service.coding.CodingRules.parse(q.getAnswer(), assignment.getMaxScore());
+                try {
+                    com.cyan.exam.system.service.coding.CodingRules.validateForPublication(q.getAnswer(), assignment.getMaxScore());
+                } catch (ServiceException ex) {
+                    throw new ServiceException("Python 题 " + id + "：" + ex.getMessage());
+                }
+                if (q.getInitialCode() != null && q.getInitialCode().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 60000)
+                    throw new ServiceException("Python 题 " + id + "：初始代码不能超过60KB");
             } else if (!"FILL_BLANK".equals(q.getQuestionType())
                     && !"SHORT_ANSWER".equals(q.getQuestionType())) {
                 throw new ServiceException("题目类型不支持：" + id);
             }
             q.setMaxScore(assignment.getMaxScore());
+            ObjectiveGradingRules.parse(q);
             ordered.add(q);
         }
-        examQuestionMapper.insertSnapshots(examId, ordered);
+        if (!ordered.isEmpty()) examQuestionMapper.insertSnapshots(examId, ordered);
+        for (var task : tasks) {
+            if (!"DRAFT".equals(task.get("state"))) throw new ServiceException("统一发布前现场任务必须为草稿");
+            onsiteMapper.state(((Number) task.get("id")).longValue(), "OPEN");
+        }
         if (cyanExamInfoMapper.publish(examId) != 1) {
             throw new ServiceException("考试发布失败");
         }
+        management.recordPublication(exam);
     }
 
     @Override
@@ -158,11 +183,30 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     @Override
     @Transactional
     public int deleteCyanExamInfoByExamIds(Long[] examIds) {
-        Arrays.stream(examIds).sorted(Comparator.naturalOrder()).forEach(this::lockEditable);
+        if (examIds == null || examIds.length == 0 || Arrays.stream(examIds).anyMatch(id -> id == null))
+            throw new ServiceException("请选择要删除的考试");
+        Set<Long> blankExams = new HashSet<>();
+        // Lock and validate the entire batch before removing any relations.
+        Arrays.stream(examIds).distinct().sorted(Comparator.naturalOrder()).forEach(id -> {
+            CyanExamInfo exam = cyanExamInfoMapper.lockByExamId(id);
+            accessScope.requireAccess(exam);
+            if ("ACTIVE".equals(exam.getLifecycle()) && exam.getPublishedAt() == null) {
+                management.validateDeletion(id);
+            } else if (exam.getPublishedAt() != null && ("TERMINATED".equals(exam.getLifecycle())
+                    || ("ACTIVE".equals(exam.getLifecycle()) && exam.getEndTime() != null
+                    && !exam.getEndTime().after(new Date())))) {
+                management.validateBlankDeletion(id);
+                blankExams.add(id);
+            } else {
+                throw new ServiceException("只能删除草稿或已结束且无实际作答的白卷考试；进行中或已归档考试不能删除");
+            }
+        });
         // 删除考试时也需要删除关联
         for (Long examId : examIds) {
+            if (blankExams.contains(examId)) management.removeBlankRelations(examId);
             examStudentMapper.deleteExamStudentByExamId(examId);
             examQuestionMapper.deleteExamQuestionByExamId(examId);
+            management.removeDraftRelations(examId);
         }
         return cyanExamInfoMapper.deleteCyanExamInfoByExamIds(examIds);
     }
@@ -181,6 +225,7 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     }
 
     private void replaceStudents(Long examId, List<Long> userIds) {
+        management.validateStudents(userIds);
         examStudentMapper.deleteExamStudentByExamId(examId);
         if (userIds != null && !userIds.isEmpty()) {
             examStudentMapper.batchInsertExamStudent(examId, userIds);
@@ -227,6 +272,12 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     }
 
     private void replaceQuestions(Long examId, List<Long> questionIds) {
+        if (questionIds != null && !questionIds.isEmpty()) {
+            var found = questionMapper.selectCyanQuestionByQuestionIds(questionIds.toArray(new Long[0]));
+            if (found.size() != new HashSet<>(questionIds).size() || found.stream().anyMatch(q ->
+                    !"0".equals(q.getStatus()) || "ROBOT_PRACTICAL".equals(q.getQuestionType())))
+                throw new ServiceException("机器人实操编程题须从现场任务添加，不能作为自动判分题选择");
+        }
         examQuestionMapper.deleteExamQuestionByExamId(examId);
         if (questionIds != null && !questionIds.isEmpty()) {
             examQuestionMapper.batchInsertExamQuestion(examId, questionIds);

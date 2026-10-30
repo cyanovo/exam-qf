@@ -12,6 +12,7 @@ import org.springframework.transaction.annotation.Transactional;
 import com.cyan.exam.system.domain.*;
 import com.cyan.exam.system.mapper.*;
 import com.cyan.exam.system.service.IExamStudentService;
+import com.cyan.exam.system.service.ExamPolicy;
 
 @Service
 public class ExamStudentServiceImpl implements IExamStudentService {
@@ -49,7 +50,7 @@ public class ExamStudentServiceImpl implements IExamStudentService {
         if (session == null) {
             throw new ServiceException("考试已结束");
         }
-        if ("IN_PROGRESS".equals(session.getStatus()) && !now.before(exam.getEndTime())) {
+        if ("IN_PROGRESS".equals(session.getStatus()) && !now.before(ExamPolicy.deadline(exam, session))) {
             sessionMapper.finish(session.getSessionId(), "AUTO_SUBMITTED");
             session.setStatus("AUTO_SUBMITTED");
         }
@@ -69,7 +70,7 @@ public class ExamStudentServiceImpl implements IExamStudentService {
         if ("IN_PROGRESS".equals(session.getStatus())) {
             CyanExamInfo exam = examInfoMapper.selectCyanExamInfoByExamId(examId);
             String status = exam != null && exam.getEndTime() != null
-                    && new Date().before(exam.getEndTime()) ? "SUBMITTED" : "AUTO_SUBMITTED";
+                    && new Date().before(ExamPolicy.deadline(exam, session)) ? "SUBMITTED" : "AUTO_SUBMITTED";
             sessionMapper.finish(session.getSessionId(), status);
             session.setStatus(status);
         }
@@ -103,6 +104,11 @@ public class ExamStudentServiceImpl implements IExamStudentService {
             return result;
         }
         CyanExamInfo target = exams.get(0);
+        result.put("startTime", target.getStartTime());
+        result.put("instructions", ExamPolicy.read(target).instructions());
+        result.put("entryAt", new Date(target.getStartTime().getTime() - target.getEarlyEntryMinutes() * 60000L));
+        result.put("canEnter", System.currentTimeMillis() >= target.getStartTime().getTime() - target.getEarlyEntryMinutes() * 60000L);
+        result.put("durationMinutes", target.getDurationMinutes());
         if (target.getStartTime().before(now) && target.getEndTime().after(now)) {
             result.put("status", "ongoing");
             result.put("examId", target.getExamId());
@@ -133,8 +139,11 @@ public class ExamStudentServiceImpl implements IExamStudentService {
             item.put("questionType", q.getQuestionType());
             item.put("difficulty", q.getDifficulty());
             item.put("category", q.getCategory());
+            item.put("maxScore", q.getMaxScore());
             if ("PYTHON".equals(q.getQuestionType())) {
                 var rules = com.cyan.exam.system.service.coding.CodingRules.parse(q.getAnswer(), q.getMaxScore());
+                item.put("description", q.getSubTitle());
+                item.put("initialCode", q.getInitialCode() == null ? "" : q.getInitialCode());
                 item.put("snapshotHash", com.cyan.exam.system.service.coding.CodingRules.hash(q.getAnswer()));
                 item.put("samples", rules.cases().stream().filter(c -> c.publicCase())
                         .map(c -> Map.of("input", c.input(), "expected", c.expected())).toList());
@@ -152,6 +161,18 @@ public class ExamStudentServiceImpl implements IExamStudentService {
             item.put("userAnswer", answerMap.getOrDefault(q.getQuestionId(), ""));
             result.add(item);
         }
+        var policy = ExamPolicy.read(examInfoMapper.selectCyanExamInfoByExamId(examId));
+        Map<Long, Integer> order = new HashMap<>();
+        for (int i=0;i<policy.entries().size();i++) {
+            var entry=policy.entries().get(i);
+            if ("QUESTION".equals(entry.kind())) {
+                order.put(entry.id(), i);
+                result.stream().filter(q->entry.id().equals(q.get("questionId"))).forEach(q->{
+                    q.put("section",entry.section()); q.put("sectionDescription",entry.description()); q.put("hint",entry.hint());
+                });
+            }
+        }
+        result.sort(Comparator.comparingInt(q->order.getOrDefault((Long)q.get("questionId"),Integer.MAX_VALUE)));
         return result;
     }
 
@@ -174,7 +195,7 @@ public class ExamStudentServiceImpl implements IExamStudentService {
             throw new ServiceException("考试不存在或不可作答");
         }
         Date now = new Date();
-        if (now.before(exam.getStartTime()) || !now.before(exam.getEndTime())) {
+        if (now.before(exam.getStartTime()) || !now.before(ExamPolicy.deadline(exam, session))) {
             throw new ServiceException("考试尚未开始或已结束");
         }
         if (examQuestionMapper.containsSnapshot(examId, questionId) == 0) {

@@ -33,7 +33,7 @@
                plain
                icon="Plus"
                @click="openSelectUser"
-               v-hasPermi="['system:role:add']"
+               v-hasPermi="['system:role:edit']"
             >添加用户</el-button>
          </el-col>
          <el-col :span="1.5">
@@ -43,11 +43,11 @@
                icon="CircleClose"
                :disabled="multiple"
                @click="cancelAuthUserAll"
-               v-hasPermi="['system:role:remove']"
+               v-hasPermi="['system:role:edit']"
             >批量取消授权</el-button>
          </el-col>
          <el-col :span="1.5">
-            <el-button 
+            <el-button v-if="!embedded"
                type="warning" 
                plain 
                icon="Close"
@@ -75,7 +75,7 @@
          </el-table-column>
          <el-table-column label="操作" align="center" class-name="small-padding fixed-width">
             <template #default="scope">
-               <el-button link type="primary" icon="CircleClose" @click="cancelAuthUser(scope.row)" v-hasPermi="['system:role:remove']">取消授权</el-button>
+               <el-button link type="primary" icon="CircleClose" @click="cancelAuthUser(scope.row)" v-hasPermi="['system:role:edit']">取消授权</el-button>
             </template>
          </el-table-column>
       </el-table>
@@ -96,6 +96,7 @@ import selectUser from "./selectUser"
 import { allocatedUserList, authUserCancel, authUserCancelAll } from "@/api/system/role"
 
 const route = useRoute()
+const props = defineProps({ roleId: [Number, String], embedded: Boolean })
 const { proxy } = getCurrentInstance()
 const { sys_normal_disable } = useDict("sys_normal_disable")
 
@@ -109,7 +110,7 @@ const userIds = ref([])
 const queryParams = reactive({
   pageNum: 1,
   pageSize: 10,
-  roleId: route.params.roleId,
+  roleId: props.roleId || route.params.roleId,
   userName: undefined,
   phonenumber: undefined,
 })
@@ -120,8 +121,7 @@ function getList() {
   allocatedUserList(queryParams).then(response => {
     userList.value = response.rows
     total.value = response.total
-    loading.value = false
-  })
+  }).finally(() => { loading.value = false })
 }
 
 /** 返回按钮 */

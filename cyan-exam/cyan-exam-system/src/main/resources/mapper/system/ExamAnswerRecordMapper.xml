@@ -73,6 +73,7 @@
         WHERE e.exam_id = #{examId} AND e.status = '0' AND e.published_at IS NOT NULL
           AND sess.status = 'IN_PROGRESS'
           AND e.start_time &lt;= now() AND e.end_time &gt; now()
+          AND (e.duration_minutes=0 OR DATE_ADD(sess.started_at,INTERVAL e.duration_minutes MINUTE)&gt;NOW())
             ON DUPLICATE KEY UPDATE answer = VALUES(answer), update_time = now()
     </insert>
 

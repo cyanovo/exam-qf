@@ -48,7 +48,9 @@
     </select>
     <update id="autoFinishExpired">
         UPDATE exam_session sess JOIN exam_info e ON e.exam_id = sess.exam_id
-        SET sess.status = 'AUTO_SUBMITTED', sess.submitted_at = e.end_time
-        WHERE sess.status = 'IN_PROGRESS' AND e.end_time &lt;= NOW()
+        SET sess.status = 'AUTO_SUBMITTED', sess.submitted_at =
+            IF(e.duration_minutes=0,e.end_time,LEAST(e.end_time,DATE_ADD(sess.started_at,INTERVAL e.duration_minutes MINUTE)))
+        WHERE sess.status = 'IN_PROGRESS' AND (e.end_time &lt;= NOW()
+          OR (e.duration_minutes&gt;0 AND DATE_ADD(sess.started_at,INTERVAL e.duration_minutes MINUTE)&lt;=NOW()))
     </update>
 </mapper>

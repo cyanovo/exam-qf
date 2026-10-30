@@ -143,7 +143,12 @@ public class SysRoleController extends BaseController
     {
         roleService.checkRoleAllowed(role);
         roleService.checkRoleDataScope(role.getRoleId());
-        return toAjax(roleService.authDataScope(role));
+        SysRole scope = new SysRole(role.getRoleId());
+        scope.setDataScope(role.getDataScope());
+        scope.setDeptIds(role.getDeptIds());
+        scope.setDeptCheckStrictly(role.isDeptCheckStrictly());
+        scope.setUpdateBy(getUsername());
+        return toAjax(roleService.authDataScope(scope));
     }
 
     /**
@@ -156,8 +161,14 @@ public class SysRoleController extends BaseController
     {
         roleService.checkRoleAllowed(role);
         roleService.checkRoleDataScope(role.getRoleId());
-        role.setUpdateBy(getUsername());
-        return toAjax(roleService.updateRoleStatus(role));
+        if (!"0".equals(role.getStatus()) && !"1".equals(role.getStatus()))
+        {
+            return error("角色状态无效");
+        }
+        SysRole status = new SysRole(role.getRoleId());
+        status.setStatus(role.getStatus());
+        status.setUpdateBy(getUsername());
+        return toAjax(roleService.updateRoleStatus(status));
     }
 
     /**
@@ -188,6 +199,7 @@ public class SysRoleController extends BaseController
     @GetMapping("/authUser/allocatedList")
     public TableDataInfo allocatedList(SysUser user)
     {
+        roleService.checkRoleDataScope(user.getRoleId());
         startPage();
         List<SysUser> list = userService.selectAllocatedList(user);
         return getDataTable(list);
@@ -200,6 +212,7 @@ public class SysRoleController extends BaseController
     @GetMapping("/authUser/unallocatedList")
     public TableDataInfo unallocatedList(SysUser user)
     {
+        roleService.checkRoleDataScope(user.getRoleId());
         startPage();
         List<SysUser> list = userService.selectUnallocatedList(user);
         return getDataTable(list);
@@ -213,6 +226,7 @@ public class SysRoleController extends BaseController
     @PutMapping("/authUser/cancel")
     public AjaxResult cancelAuthUser(@RequestBody SysUserRole userRole)
     {
+        checkMemberChange(userRole.getRoleId(), new Long[] { userRole.getUserId() });
         return toAjax(roleService.deleteAuthUser(userRole));
     }
 
@@ -224,6 +238,7 @@ public class SysRoleController extends BaseController
     @PutMapping("/authUser/cancelAll")
     public AjaxResult cancelAuthUserAll(Long roleId, Long[] userIds)
     {
+        checkMemberChange(roleId, userIds);
         return toAjax(roleService.deleteAuthUsers(roleId, userIds));
     }
 
@@ -235,8 +250,33 @@ public class SysRoleController extends BaseController
     @PutMapping("/authUser/selectAll")
     public AjaxResult selectAuthUserAll(Long roleId, Long[] userIds)
     {
-        roleService.checkRoleDataScope(roleId);
+        checkMemberChange(roleId, userIds);
+        SysRole role = roleService.selectRoleById(roleId);
+        if (!"0".equals(role.getStatus()))
+        {
+            return error("停用角色不能分配用户");
+        }
         return toAjax(roleService.insertAuthUsers(roleId, userIds));
+    }
+
+    private void checkMemberChange(Long roleId, Long[] userIds)
+    {
+        if (roleId == null || userIds == null || userIds.length == 0)
+        {
+            throw new com.cyan.exam.common.exception.ServiceException("请选择角色和用户");
+        }
+        roleService.checkRoleAllowed(new SysRole(roleId));
+        roleService.checkRoleDataScope(roleId);
+        SysRole role = roleService.selectRoleById(roleId);
+        if (role == null || !"0".equals(role.getDelFlag()))
+        {
+            throw new com.cyan.exam.common.exception.ServiceException("角色不存在");
+        }
+        for (Long userId : userIds)
+        {
+            if (userId == null) throw new com.cyan.exam.common.exception.ServiceException("用户不能为空");
+            userService.checkUserDataScope(userId);
+        }
     }
 
     /**

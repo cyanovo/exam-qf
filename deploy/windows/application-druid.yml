@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    type: com.alibaba.druid.pool.DruidDataSource
+    driverClassName: com.mysql.cj.jdbc.Driver
+    druid:
+      master:
+        url: ${SPRING_DATASOURCE_DRUID_MASTER_URL}
+        username: ${SPRING_DATASOURCE_DRUID_MASTER_USERNAME}
+        password: ${SPRING_DATASOURCE_DRUID_MASTER_PASSWORD}
+      slave:
+        enabled: false
+      initialSize: 2
+      minIdle: 2
+      maxActive: 20
+      maxWait: 60000
+      connectTimeout: 30000
+      socketTimeout: 60000
+      timeBetweenEvictionRunsMillis: 60000
+      minEvictableIdleTimeMillis: 300000
+      maxEvictableIdleTimeMillis: 900000
+      validationQuery: SELECT 1
+      testWhileIdle: true
+      testOnBorrow: false
+      testOnReturn: false
+      statViewServlet:
+        enabled: false

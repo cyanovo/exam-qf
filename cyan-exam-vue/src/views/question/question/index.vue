@@ -18,6 +18,11 @@
             <el-option v-for="item in typeOptions" :key="item.value" :label="item.label" :value="item.value" />
           </el-select>
         </el-form-item>
+        <el-form-item prop="reviewState">
+          <el-select v-model="queryParams.reviewState" placeholder="全部审核状态" clearable style="width:150px">
+            <el-option v-for="(label,value) in reviewStates" :key="value" :value="value" :label="label" />
+          </el-select>
+        </el-form-item>
         <el-form-item>
           <el-button type="primary" icon="Search" @click="handleQuery">搜索</el-button>
           <el-button icon="Refresh" @click="resetQuery">重置</el-button>
@@ -58,7 +63,9 @@
       <el-table v-loading="loading" :data="questionList" @selection-change="handleSelectionChange" stripe border header-cell-class-name="table-header">
         <el-table-column type="selection" width="55" align="center" />
         <el-table-column label="ID" align="center" prop="questionId" width="80" />
-        <el-table-column label="分类" align="center" prop="category" width="100" />
+        <el-table-column label="分类" align="center" width="100">
+          <template #default="{ row }">{{ row.category === 'PYTHON' ? 'Python' : row.category }}</template>
+        </el-table-column>
         <el-table-column label="难度" align="center" width="120">
           <template #default="{ row }">
             <el-rate v-model="row.difficulty" disabled show-score text-color="#ff9900" />
@@ -70,15 +77,25 @@
           </template>
         </el-table-column>
         <el-table-column label="题干" prop="title" show-overflow-tooltip min-width="200" />
-        <el-table-column label="答案" align="center" width="120" prop="answer" />
-        <el-table-column label="状态" align="center" width="80">
+        <el-table-column label="答案" align="center" width="120">
+          <template #default="{ row }">{{ row.questionType === 'ROBOT_PRACTICAL' ? '现场评分项' : row.questionType === 'PYTHON' ? '测试用例' : row.answer }}</template>
+        </el-table-column>
+        <el-table-column label="审核状态" align="center" width="110">
           <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="0" :inactive-value="1" disabled inline-prompt active-text="启" inactive-text="停" />
+            <el-tag :type="row.reviewState === 'PUBLISHED' ? 'success' : row.reviewState === 'REVIEW' ? 'warning' : 'info'">{{ reviewStates[row.reviewState] || '待迁移' }}</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" align="center" width="150" fixed="right">
+        <el-table-column label="操作" align="center" width="350" fixed="right">
           <template #default="scope">
-            <el-button link type="primary" icon="Edit" @click="handleUpdate(scope.row)" v-hasPermi="['question:question:edit']">修改</el-button>
+            <el-button link type="primary" icon="View" @click="handleUpdate(scope.row, true)" v-hasPermi="['question:question:query']">查看</el-button>
+            <el-button link type="primary" icon="Edit" :disabled="scope.row.reviewState === 'REVIEW'" @click="handleUpdate(scope.row)" v-hasPermi="['question:question:edit']">修改</el-button>
+            <el-button v-if="scope.row.reviewState === 'DRAFT'" link type="primary" @click="transition(scope.row,'SUBMIT')" v-hasPermi="['question:question:edit']">送审</el-button>
+            <el-button v-if="scope.row.reviewState === 'REVIEW'" link type="success" @click="transition(scope.row,'APPROVE')" v-hasPermi="['question:question:review']">通过</el-button>
+            <el-button v-if="scope.row.reviewState === 'REVIEW'" link type="warning" @click="transition(scope.row,'REJECT')" v-hasPermi="['question:question:review']">退回</el-button>
+            <el-button v-if="scope.row.reviewState === 'REVIEW'" link @click="transition(scope.row,'WITHDRAW')" v-hasPermi="['question:question:edit']">撤回</el-button>
+            <el-button v-if="scope.row.reviewState === 'PUBLISHED'" link type="warning" @click="transition(scope.row,'DISABLE')" v-hasPermi="['question:question:edit']">停用</el-button>
+            <el-button v-if="scope.row.reviewState === 'DISABLED'" link @click="transition(scope.row,'REOPEN')" v-hasPermi="['question:question:edit']">转草稿</el-button>
+            <el-button link @click="showHistory(scope.row)" v-hasPermi="['question:question:query']">记录</el-button>
             <el-button link type="primary" icon="Delete" @click="handleDelete(scope.row)" v-hasPermi="['question:question:remove']">删除</el-button>
           </template>
         </el-table-column>
@@ -86,9 +103,19 @@
       <pagination v-show="total>0" :total="total" v-model:page="queryParams.pageNum" v-model:limit="queryParams.pageSize" @pagination="getList" />
     </div>
 
+    <el-dialog v-model="historyOpen" title="题目审核记录" width="850px">
+      <el-table :data="historyRows" max-height="500">
+        <el-table-column prop="revision" label="版本" width="70" />
+        <el-table-column label="操作" width="100"><template #default="{row}">{{ reviewActions[row.action] || row.action }}</template></el-table-column>
+        <el-table-column label="状态" width="100"><template #default="{row}">{{ reviewStates[row.toState] }}</template></el-table-column>
+        <el-table-column prop="actor" label="操作人" width="120" />
+        <el-table-column prop="reason" label="意见" min-width="200" />
+        <el-table-column prop="createdAt" label="时间" width="180" />
+      </el-table>
+    </el-dialog>
     <!-- 新增/修改对话框 -->
     <el-dialog :title="title" v-model="open" width="750px" append-to-body destroy-on-close class="modern-dialog">
-      <el-form ref="questionRef" :model="form" :rules="rules" label-width="100px" class="exam-form">
+      <el-form ref="questionRef" :model="form" :rules="rules" :disabled="readOnly" label-width="100px" class="exam-form">
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="题目分类" prop="category">
@@ -132,10 +159,30 @@
         <el-form-item v-if="form.questionType === 'PYTHON'" label="测试用例" prop="answer">
           <CodingCases v-model="form.answer" />
         </el-form-item>
+        <el-form-item v-if="form.questionType === 'PYTHON'" label="初始代码">
+          <el-input v-model="form.initialCode" type="textarea" :rows="7" placeholder="可选：学生首次打开时显示的 Python 代码" />
+        </el-form-item>
+        <el-form-item v-if="form.questionType === 'ROBOT_PRACTICAL'" label="任务要求" prop="subTitle">
+          <el-input v-model="form.subTitle" type="textarea" :rows="7" maxlength="5000" show-word-limit />
+        </el-form-item>
+        <el-form-item v-if="form.questionType === 'ROBOT_PRACTICAL'" label="现场评分项">
+          <div class="robot-rubric">
+            <div v-for="(item, index) in robotItems" :key="index" class="robot-rubric-row">
+              <el-input v-model="item.title" maxlength="120" placeholder="运行步骤与得分条件" />
+              <el-input-number v-model="item.maxScore" :min="1" :max="100" />
+              <el-button icon="Delete" aria-label="删除评分项" :disabled="robotItems.length === 1" @click="robotItems.splice(index, 1)" />
+            </div>
+            <el-button icon="Plus" :disabled="robotItems.length >= 30" @click="robotItems.push({ title: '', maxScore: 5 })">添加评分项</el-button>
+            <div>合计 {{ robotItems.reduce((sum, item) => sum + (item.maxScore || 0), 0) }} 分</div>
+          </div>
+        </el-form-item>
         <el-form-item v-if="isFillOrShort" label="答案" prop="answer">
           <el-input v-model="form.answer" type="textarea" class="limited-textarea" :placeholder="form.questionType === 'FILL_BLANK' ? '多个填空答案请用英文分号(;)分隔' : '请输入参考答案'" />
         </el-form-item>
 
+        <el-form-item v-if="['MULTI_CHOICE', 'FILL_BLANK'].includes(form.questionType)" label="评分规则">
+          <GradingRules :key="form.questionType" v-model="form.gradingRules" :type="form.questionType" :answer="form.answer" />
+        </el-form-item>
         <el-form-item label="备注" prop="remark">
           <el-input v-model="form.remark" type="textarea" class="limited-textarea" placeholder="可选备注" />
         </el-form-item>
@@ -143,7 +190,7 @@
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="cancel">取 消</el-button>
-          <el-button type="primary" @click="submitForm">确 定</el-button>
+          <el-button v-if="!readOnly" type="primary" @click="submitForm">确 定</el-button>
         </span>
       </template>
     </el-dialog>
@@ -233,6 +280,7 @@
 
 <script setup name="Question">
 import CodingCases from './CodingCases.vue'
+import GradingRules from './GradingRules.vue'
 import { listQuestion, getQuestion, delQuestion, addQuestion, updateQuestion, importJson } from "@/api/question/question"
 import { getCurrentInstance, reactive, ref, toRefs, computed, nextTick } from "vue"
 import { getToken } from "@/utils/auth"
@@ -240,11 +288,33 @@ import request from '@/utils/request'
 import { Upload, MagicStick } from '@element-plus/icons-vue'
 
 const { proxy } = getCurrentInstance()
+const reviewStates = { DRAFT:'草稿', REVIEW:'待审核', PUBLISHED:'已发布', DISABLED:'停用' }
+const reviewActions = { CREATE:'创建',EDIT:'修改',SUBMIT:'送审',APPROVE:'通过',REJECT:'退回',WITHDRAW:'撤回',DISABLE:'停用',REOPEN:'转草稿' }
+const historyOpen=ref(false), historyRows=ref([]), reviewBusy=ref(false)
+async function transition(row,action) {
+  if(reviewBusy.value) return
+  let reason=''
+  try {
+    if(action==='REJECT') reason=(await proxy.$prompt('请填写退回原因','退回题目',{inputValidator:value => !!value?.trim() || '请填写原因'})).value
+    else await proxy.$modal.confirm(`确认${reviewActions[action]}题目 ${row.questionId}？`)
+  } catch { return }
+  reviewBusy.value=true
+  try {
+    const endpoint=['APPROVE','REJECT'].includes(action)?'review':'workflow'
+    await request.post(`/question/question/${row.questionId}/${endpoint}`,{action,revision:row.revision,reason})
+    proxy.$modal.msgSuccess('已更新'); getList()
+  } finally { reviewBusy.value=false }
+}
+async function showHistory(row) {
+  historyRows.value=(await request.get(`/question/question/${row.questionId}/history`)).data
+  historyOpen.value=true
+}
 
 const importOpen = ref(false)
 const uploadRef = ref(null)
 const questionList = ref([])
 const open = ref(false)
+const readOnly = ref(false)
 const loading = ref(true)
 const showSearch = ref(true)
 const ids = ref([])
@@ -270,6 +340,7 @@ const data = reactive({
     title: "",
     subTitle: "",
     answer: "",
+    initialCode: "",
     status: 0,
     remark: ""
   },
@@ -278,7 +349,8 @@ const data = reactive({
     pageSize: 10,
     category: undefined,
     difficulty: undefined,
-    questionType: undefined
+    questionType: undefined,
+    reviewState: undefined
   },
   rules: {
     category: [{ required: true, message: "题目分类不能为空", trigger: "change" }],
@@ -288,6 +360,7 @@ const data = reactive({
     answer: [{
       validator: (rule, value, callback) => {
         if (isChoiceOrJudge.value) callback()
+        else if (form.value.questionType === 'ROBOT_PRACTICAL') callback()
         else if (!value || value.trim() === "") callback(new Error("答案不能为空"))
         else callback()
       },
@@ -311,11 +384,12 @@ const typeOptions = [
   { label: "判断题", value: "JUDGE" },
   { label: "填空题", value: "FILL_BLANK" },
   { label: "简答题", value: "SHORT_ANSWER" },
-  { label: "Python编程", value: "PYTHON" }
+  { label: "Python编程", value: "PYTHON" },
+  { label: "机器人实操编程", value: "ROBOT_PRACTICAL" }
 ]
 
 const typeLabel = (type) => {
-  const map = { SINGLE_CHOICE: "单选题", MULTI_CHOICE: "多选题", JUDGE: "判断题", FILL_BLANK: "填空题", SHORT_ANSWER: "简答题", PYTHON: "Python编程" }
+  const map = { SINGLE_CHOICE: "单选题", MULTI_CHOICE: "多选题", JUDGE: "判断题", FILL_BLANK: "填空题", SHORT_ANSWER: "简答题", PYTHON: "Python编程", ROBOT_PRACTICAL: "机器人实操编程" }
   return map[type] || type
 }
 const typeTag = (type) => {
@@ -324,6 +398,7 @@ const typeTag = (type) => {
 }
 
 const optionList = ref([])
+const robotItems = ref([{ title: '', maxScore: 5 }])
 const singleCorrect = ref("")
 const isChoiceOrJudge = computed(() => ["SINGLE_CHOICE", "MULTI_CHOICE", "JUDGE"].includes(form.value.questionType))
 const isFillOrShort = computed(() => ["FILL_BLANK", "SHORT_ANSWER"].includes(form.value.questionType))
@@ -348,6 +423,9 @@ function initOptionsForType() {
 }
 
 function onTypeChange() {
+  form.value.gradingRules = ''
+  if (form.value.questionType === 'ROBOT_PRACTICAL' && !robotItems.value.length)
+    robotItems.value = [{ title: '', maxScore: 5 }]
   if (["SINGLE_CHOICE", "MULTI_CHOICE", "JUDGE"].includes(form.value.questionType)) {
     if (form.value.subTitle) {
       try {
@@ -397,8 +475,7 @@ function getList() {
   listQuestion(queryParams.value).then(response => {
     questionList.value = response.rows
     total.value = response.total
-    loading.value = false
-  })
+  }).finally(() => { loading.value = false })
 }
 
 function cancel() {
@@ -407,6 +484,7 @@ function cancel() {
 }
 
 function reset() {
+  readOnly.value = false
   form.value = {
     questionId: null,
     category: "",
@@ -415,10 +493,12 @@ function reset() {
     title: "",
     subTitle: "",
     answer: "",
+    initialCode: "",
     status: 0,
     remark: ""
   }
   optionList.value = []
+  robotItems.value = [{ title: '', maxScore: 5 }]
   singleCorrect.value = ""
   proxy.resetForm("questionRef")
 }
@@ -446,8 +526,9 @@ function handleAdd() {
   nextTick(() => onTypeChange())
 }
 
-function handleUpdate(row) {
+function handleUpdate(row, viewing = false) {
   reset()
+  readOnly.value = viewing === true
   const _questionId = row.questionId || ids.value
   getQuestion(_questionId).then(response => {
     form.value = response.data
@@ -461,14 +542,27 @@ function handleUpdate(row) {
     } else {
       optionList.value = []
     }
+    if (form.value.questionType === 'ROBOT_PRACTICAL') {
+      try { robotItems.value = JSON.parse(form.value.answer) } catch { robotItems.value = [{ title: '', maxScore: 5 }] }
+    }
     open.value = true
-    title.value = "修改题库"
+    title.value = readOnly.value ? "查看题目" : "修改题库"
   })
 }
 
 function submitForm() {
+  if (readOnly.value) return
   proxy.$refs["questionRef"].validate(valid => {
     if (!valid) return
+    if (form.value.questionType === 'ROBOT_PRACTICAL') {
+      if (!form.value.subTitle?.trim() || !robotItems.value.length || robotItems.value.some(item => !item.title?.trim() || !item.maxScore) ||
+          robotItems.value.reduce((sum, item) => sum + item.maxScore, 0) > 1000) {
+        proxy.$modal.msgError('请填写任务要求与有效评分项（总分不超过1000分）')
+        return
+      }
+      form.value.answer = JSON.stringify(robotItems.value)
+    }
+    if (!['MULTI_CHOICE', 'FILL_BLANK'].includes(form.value.questionType)) form.value.gradingRules = ''
     if (isChoiceOrJudge.value) {
       form.value.subTitle = JSON.stringify(optionList.value)
       syncAnswerFromOptions()
@@ -745,6 +839,9 @@ getList()
 /* 操作列按钮保持水平排列 */
 :deep(.el-table td:last-child .cell) {
   display: flex;
+  flex-wrap: wrap;
+  white-space: normal;
+  max-height: none;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -756,6 +853,9 @@ getList()
   align-items: center;
   margin-bottom: 10px;
 }
+.robot-rubric { width: 100%; }
+.robot-rubric-row { display: flex; gap: 8px; margin-bottom: 8px; }
+.robot-rubric-row .el-input { flex: 1; min-width: 0; }
 
 /* 对话框圆角 */
 :deep(.modern-dialog) {

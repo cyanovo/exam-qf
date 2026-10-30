@@ -8,6 +8,7 @@
       <h2>{{ examName }}</h2>
       <p>考试正在进行中</p>
       <el-button type="primary" @click="enterExam">进入考试</el-button>
+      <el-button @click="router.push(`/exam/dossier/${examId}`)">异常与材料</el-button>
     </div>
     <div v-else-if="status === 'upcoming'" class="upcoming">
       <h2>{{ examName }}</h2>
@@ -15,6 +16,12 @@
       <div class="countdown">{{ countdown }}</div>
       <el-button type="success" :disabled="!canEnter" @click="enterExam">进入考试</el-button>
     </div>
+    <el-dialog v-model="waitingRoom" title="候考" width="min(640px, 94vw)">
+      <h3>{{ examName }}</h3>
+      <p>距开考 {{ countdown }}</p><p>作答时长：{{ durationMinutes || '至场次结束' }}{{ durationMinutes ? ' 分钟' : '' }}</p>
+      <p class="instructions">{{ instructions || '暂无补充说明' }}</p>
+      <template #footer><el-button @click="router.push(`/exam/dossier/${examId}`)">异常提报</el-button><el-button type="primary" :disabled="now.getTime()<new Date(startTime).getTime()" @click="enterExam">开始作答</el-button></template>
+    </el-dialog>
   </div>
 </template>
 
@@ -29,6 +36,7 @@ const examId = ref(null)
 const examName = ref('')
 const startTime = ref(null)
 const endTime = ref(null)
+const entryAt = ref(null), instructions = ref(''), durationMinutes = ref(0), waitingRoom = ref(false)
 const now = ref(new Date())
 let timer = null
 
@@ -44,7 +52,7 @@ const countdown = computed(() => {
 
 const canEnter = computed(() => {
   if (!startTime.value || !endTime.value) return false
-  const s = new Date(startTime.value).getTime()
+  const s = new Date(entryAt.value || startTime.value).getTime()
   const e = new Date(endTime.value).getTime()
   return now.value.getTime() >= s && now.value.getTime() <= e
 })
@@ -58,12 +66,16 @@ function fetchWaitInfo() {
       examName.value = data.examName
       startTime.value = data.startTime || null
       endTime.value = data.endTime || null
+      entryAt.value = data.entryAt
+      instructions.value = data.instructions || ''
+      durationMinutes.value = data.durationMinutes || 0
     }
   })
 }
 
 function enterExam() {
   if (examId.value) {
+    if (now.value.getTime()<new Date(startTime.value).getTime()) {waitingRoom.value=true;return}
     router.push(`/exam/answer?examId=${examId.value}`)
   }
 }
@@ -93,7 +105,7 @@ onUnmounted(() => clearInterval(timer))
   background: rgba(255, 255, 255, 0.8);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 48px 40px;
   box-shadow: 0 8px 32px rgba(0, 137, 123, 0.08);
   border: 1px solid rgba(0, 137, 123, 0.1);
@@ -121,7 +133,7 @@ onUnmounted(() => clearInterval(timer))
   color: #00897b;
   margin: 20px 0;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 2px;
+  letter-spacing: 0;
 }
 
 :deep(.el-button--primary) {
@@ -138,3 +150,4 @@ onUnmounted(() => clearInterval(timer))
   font-weight: 600;
 }
 </style>
+<style scoped>.instructions {white-space:pre-wrap;overflow-wrap:anywhere}</style>

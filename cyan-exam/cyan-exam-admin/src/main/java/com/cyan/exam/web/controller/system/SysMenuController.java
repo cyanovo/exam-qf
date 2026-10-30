@@ -34,6 +34,9 @@ public class SysMenuController extends BaseController
     @Autowired
     private ISysMenuService menuService;
 
+    @Autowired
+    private com.cyan.exam.system.service.ISysRoleService roleService;
+
     /**
      * 获取菜单列表
      */
@@ -59,9 +62,11 @@ public class SysMenuController extends BaseController
      * 获取菜单下拉树列表
      */
     @GetMapping("/treeselect")
+    @PreAuthorize("@ss.hasAnyPermi('system:menu:list,system:role:add,system:role:edit')")
     public AjaxResult treeselect(SysMenu menu)
     {
-        List<SysMenu> menus = menuService.selectMenuList(menu, getUserId());
+        List<SysMenu> menus = menuService.selectMenuList(menu,
+                com.cyan.exam.common.utils.SecurityUtils.hasPermi("system:role:edit") ? 1L : getUserId());
         return success(menuService.buildMenuTreeSelect(menus));
     }
 
@@ -69,9 +74,12 @@ public class SysMenuController extends BaseController
      * 加载对应角色菜单列表树
      */
     @GetMapping(value = "/roleMenuTreeselect/{roleId}")
+    @PreAuthorize("@ss.hasAnyPermi('system:role:query,system:role:edit')")
     public AjaxResult roleMenuTreeselect(@PathVariable("roleId") Long roleId)
     {
-        List<SysMenu> menus = menuService.selectMenuList(getUserId());
+        roleService.checkRoleDataScope(roleId);
+        List<SysMenu> menus = menuService.selectMenuList(
+                com.cyan.exam.common.utils.SecurityUtils.hasPermi("system:role:edit") ? 1L : getUserId());
         AjaxResult ajax = AjaxResult.success();
         ajax.put("checkedKeys", menuService.selectMenuListByRoleId(roleId));
         ajax.put("menus", menuService.buildMenuTreeSelect(menus));

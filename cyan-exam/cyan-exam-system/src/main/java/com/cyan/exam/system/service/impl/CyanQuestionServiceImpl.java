@@ -26,6 +26,8 @@ public class CyanQuestionServiceImpl implements ICyanQuestionService {
 
     @Autowired
     private CyanQuestionMapper cyanQuestionMapper;
+    @Autowired
+    private com.cyan.exam.system.service.QuestionReviewService reviews;
 
     @Override
     public List<CyanQuestion> selectCyanQuestionList(CyanQuestion cyanQuestion) {
@@ -38,13 +40,58 @@ public class CyanQuestionServiceImpl implements ICyanQuestionService {
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public int insertCyanQuestion(CyanQuestion cyanQuestion) {
-        return cyanQuestionMapper.insertCyanQuestion(cyanQuestion);
+        validateInitialCode(cyanQuestion);
+        validateRobotQuestion(cyanQuestion);
+        ObjectiveGradingRules.parse(cyanQuestion);
+        cyanQuestion.setCreateBy(com.cyan.exam.common.utils.SecurityUtils.getUsername());
+        cyanQuestion.setCreateTime(new Date());
+        cyanQuestion.setStatus("0");
+        cyanQuestion.setReviewState("DRAFT");
+        cyanQuestion.setRevision(1);
+        int count=cyanQuestionMapper.insertCyanQuestion(cyanQuestion);
+        reviews.record(cyanQuestion,"CREATE",null,"");
+        return count;
     }
 
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public int updateCyanQuestion(CyanQuestion cyanQuestion) {
-        return cyanQuestionMapper.updateCyanQuestion(cyanQuestion);
+        validateInitialCode(cyanQuestion);
+        CyanQuestion stored = reviews.lockForEdit(cyanQuestion.getQuestionId(),cyanQuestion.getRevision());
+        if (stored != null) {
+            if (cyanQuestion.getQuestionType() == null) cyanQuestion.setQuestionType(stored.getQuestionType());
+            if (cyanQuestion.getGradingRules() == null) cyanQuestion.setGradingRules(stored.getGradingRules());
+        }
+        validateRobotQuestion(cyanQuestion);
+        ObjectiveGradingRules.parse(cyanQuestion);
+        cyanQuestion.setStatus("0");
+        cyanQuestion.setUpdateBy(com.cyan.exam.common.utils.SecurityUtils.getUsername());
+        cyanQuestion.setUpdateTime(new Date());
+        int count=cyanQuestionMapper.updateCyanQuestion(cyanQuestion);
+        CyanQuestion saved=cyanQuestionMapper.selectCyanQuestionByQuestionId(cyanQuestion.getQuestionId());
+        reviews.record(saved,"EDIT",stored.getReviewState(),"修改后重新审核；已发布考试快照不受影响");
+        return count;
+    }
+
+    private void validateInitialCode(CyanQuestion question) {
+        if (question.getInitialCode() != null
+                && question.getInitialCode().getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 60000)
+            throw new com.cyan.exam.common.exception.ServiceException("初始代码不能超过60KB");
+    }
+    private void validateRobotQuestion(CyanQuestion question) {
+        if (!"ROBOT_PRACTICAL".equals(question.getQuestionType())) return;
+        if (question.getTitle() == null || question.getTitle().isBlank() || question.getTitle().length() > 120
+                || question.getSubTitle() == null || question.getSubTitle().isBlank()
+                || question.getSubTitle().length() > 5000)
+            throw new com.cyan.exam.common.exception.ServiceException("机器人题需填写名称和不超过5000字的任务要求");
+        try {
+            com.cyan.exam.system.service.OnsiteService.validateItems(
+                    JSON.parseArray(question.getAnswer(), com.cyan.exam.system.service.OnsiteService.Item.class));
+        } catch (RuntimeException ex) {
+            throw new com.cyan.exam.common.exception.ServiceException("机器人题评分项无效：" + ex.getMessage());
+        }
     }
 
     @Override
@@ -56,6 +103,7 @@ public class CyanQuestionServiceImpl implements ICyanQuestionService {
      * Excel 文件导入
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public String importQuestions(MultipartFile file) {
         ExcelUtil<CyanQuestion> util = new ExcelUtil<>(CyanQuestion.class);
         List<CyanQuestion> list;
@@ -72,6 +120,7 @@ public class CyanQuestionServiceImpl implements ICyanQuestionService {
      * JSON 粘贴导入
      */
     @Override
+    @org.springframework.transaction.annotation.Transactional
     public String importQuestionsFromJson(String json) {
         List<CyanQuestion> list;
         try {

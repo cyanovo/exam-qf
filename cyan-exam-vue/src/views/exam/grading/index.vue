@@ -14,9 +14,9 @@
             <span>{{ parseTime(row.endTime, '{y}-{m}-{d} {h}:{i}') }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="120">
+        <el-table-column label="操作" width="220">
           <template #default="scope">
-            <el-button link type="primary" @click="$router.push(`/exam/grading/students/${scope.row.examId}`)">批改</el-button>
+            <el-button link type="primary" @click="$router.push(`/exam/grading/workspace/${scope.row.examId}`)">评分与成绩</el-button>
           </template>
         </el-table-column>
       </el-table>

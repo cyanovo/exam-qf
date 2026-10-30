@@ -5,7 +5,8 @@ import org.apache.ibatis.annotations.*;
 
 public interface CodeSubmissionMapper {
     String COLUMNS = "id,exam_id AS examId,user_id AS userId,question_id AS questionId,mode,idem_key AS idemKey,"
-            + "source,source_hash AS sourceHash,snapshot_hash AS snapshotHash,state,score,attempts,progress,feedback,received_at AS receivedAt";
+            + "source,source_hash AS sourceHash,snapshot_hash AS snapshotHash,state,score,attempts,progress,feedback,received_at AS receivedAt,"
+            + "run_version AS runVersion,completed_at AS completedAt";
     @Select("SELECT " + COLUMNS + " FROM exam_code_submission WHERE id=#{id}")
     Map<String, Object> get(Long id);
     @Select("SELECT " + COLUMNS + " FROM exam_code_submission WHERE exam_id=#{examId} AND user_id=#{userId} AND idem_key=#{key}")
@@ -26,7 +27,8 @@ public interface CodeSubmissionMapper {
             + "SELECT #{examId},#{userId},#{questionId},#{mode},#{key},#{source},#{sourceHash},#{snapshotHash} "
             + "FROM exam_info e JOIN exam_session s ON s.exam_id=e.exam_id AND s.user_id=#{userId} "
             + "WHERE e.exam_id=#{examId} AND e.status='0' AND e.published_at IS NOT NULL "
-            + "AND e.start_time<=NOW(3) AND e.end_time>NOW(3) AND s.status='IN_PROGRESS'")
+            + "AND e.start_time<=NOW(3) AND e.end_time>NOW(3) AND s.status='IN_PROGRESS' "
+            + "AND (e.duration_minutes=0 OR DATE_ADD(s.started_at,INTERVAL e.duration_minutes MINUTE)>NOW(3))")
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insert(Map<String, Object> submission);
 
@@ -48,4 +50,23 @@ public interface CodeSubmissionMapper {
     int fail(@Param("id") Long id, @Param("token") String token);
     @Update("UPDATE exam_code_submission SET state='RETRY',attempts=0,lease_until=NULL WHERE id=#{id} AND state='FAILED'")
     int retry(Long id);
+
+    @Select("SELECT " + COLUMNS + " FROM exam_code_submission WHERE id=#{id} FOR UPDATE")
+    Map<String, Object> lock(Long id);
+
+    @Insert("INSERT INTO exam_code_evaluation_history(submission_id,run_version,state,score,attempts,feedback,progress,"
+            + "source_hash,snapshot_hash,completed_at,actor_id,reason) "
+            + "SELECT id,run_version,state,score,attempts,feedback,progress,source_hash,snapshot_hash,completed_at,#{actor},#{reason} "
+            + "FROM exam_code_submission WHERE id=#{id} AND run_version=#{version} AND state IN ('FAILED','SUCCEEDED')")
+    int archive(@Param("id") Long id, @Param("version") int version, @Param("actor") Long actor, @Param("reason") String reason);
+
+    @Update("UPDATE exam_code_submission SET state='QUEUED',score=NULL,attempts=0,progress=NULL,feedback=NULL,"
+            + "completed_at=NULL,lease_token=NULL,lease_until=NULL,run_version=run_version+1 "
+            + "WHERE id=#{id} AND run_version=#{version} AND state IN ('FAILED','SUCCEEDED')")
+    int regrade(@Param("id") Long id, @Param("version") int version);
+
+    @Select("SELECT run_version AS runVersion,state,score,attempts,feedback,source_hash AS sourceHash,"
+            + "snapshot_hash AS snapshotHash,completed_at AS completedAt,actor_id AS actorId,reason,archived_at AS archivedAt "
+            + "FROM exam_code_evaluation_history WHERE submission_id=#{id} ORDER BY run_version DESC")
+    List<Map<String, Object>> evaluations(Long id);
 }

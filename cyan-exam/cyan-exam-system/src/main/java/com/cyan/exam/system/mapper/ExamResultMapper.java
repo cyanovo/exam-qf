@@ -5,6 +5,9 @@ import java.util.Map;
 import org.apache.ibatis.annotations.*;
 
 public interface ExamResultMapper {
+    @Select("SELECT id,version_no AS version,state,payload,reason,requested_by AS requestedBy,released_at AS releasedAt "
+            + "FROM exam_result_version WHERE exam_id=#{id} ORDER BY version_no DESC")
+    List<Map<String,Object>> history(Long id);
     @Select("SELECT id, exam_id AS examId, version_no AS version, state, payload, requested_by AS requestedBy, "
             + "reviewed_by AS reviewedBy, released_at AS releasedAt FROM exam_result_version "
             + "WHERE exam_id=#{examId} ORDER BY version_no DESC LIMIT 1")

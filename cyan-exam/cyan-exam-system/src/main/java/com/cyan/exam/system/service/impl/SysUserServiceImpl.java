@@ -23,6 +23,7 @@ import com.cyan.exam.system.mapper.SysPostMapper;
 import com.cyan.exam.system.mapper.SysRoleMapper;
 import com.cyan.exam.system.mapper.SysUserMapper;
 import com.cyan.exam.system.mapper.SysUserPostMapper;
+import com.cyan.exam.system.mapper.StudentLifecycleMapper;
 import com.cyan.exam.system.mapper.SysUserRoleMapper;
 import com.cyan.exam.system.service.ISysConfigService;
 import com.cyan.exam.system.service.ISysDeptService;
@@ -47,6 +48,9 @@ public class SysUserServiceImpl implements ISysUserService
 
     @Autowired
     private SysUserPostMapper userPostMapper;
+
+    @Autowired
+    private StudentLifecycleMapper studentLifecycleMapper;
 
     @Autowired
     private ISysConfigService configService;
@@ -115,19 +119,22 @@ public class SysUserServiceImpl implements ISysUserService
     @Override
     public boolean checkUserNameUnique(SysUser user)
     {
-        return StringUtils.isNull(userMapper.checkUserNameUnique(user.getUserName()));
+        SysUser existing = userMapper.checkUserNameUnique(user.getUserName());
+        return existing == null || existing.getUserId().equals(user.getUserId());
     }
 
     @Override
     public boolean checkPhoneUnique(SysUser user)
     {
-        return StringUtils.isNull(userMapper.checkPhoneUnique(user.getPhonenumber()));
+        SysUser existing = userMapper.checkPhoneUnique(user.getPhonenumber());
+        return existing == null || existing.getUserId().equals(user.getUserId());
     }
 
     @Override
     public boolean checkEmailUnique(SysUser user)
     {
-        return StringUtils.isNull(userMapper.checkEmailUnique(user.getEmail()));
+        SysUser existing = userMapper.checkEmailUnique(user.getEmail());
+        return existing == null || existing.getUserId().equals(user.getUserId());
     }
 
     @Override
@@ -280,8 +287,7 @@ public class SysUserServiceImpl implements ISysUserService
     @Transactional
     public int deleteUserById(Long userId)
     {
-        userMapper.deleteUserById(userId);
-        return userRoleMapper.deleteUserRoleByUserId(userId);
+        return deleteUserByIds(new Long[]{userId});
     }
 
     @Override
@@ -292,9 +298,19 @@ public class SysUserServiceImpl implements ISysUserService
         {
             checkUserAllowed(new SysUser(userId));
             checkUserDataScope(userId);
+            if (userId.equals(SecurityUtils.getUserId()))
+            {
+                throw new ServiceException("当前用户不能删除");
+            }
         }
-        userMapper.deleteUserByIds(userIds);
-        return userRoleMapper.deleteUserRole(userIds);
+        int rows = userMapper.deleteUserByIds(userIds);
+        userRoleMapper.deleteUserRole(userIds);
+        userPostMapper.deleteUserPost(userIds);
+        for (Long userId : userIds)
+        {
+            studentLifecycleMapper.releaseDeletedStudentByUserId(userId);
+        }
+        return rows;
     }
 
     @Override

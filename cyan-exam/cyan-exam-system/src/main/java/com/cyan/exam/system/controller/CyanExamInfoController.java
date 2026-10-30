@@ -74,7 +74,7 @@ public class CyanExamInfoController extends BaseController {
     }
 
     // 获取考试已分配的学生ID列表
-    @PreAuthorize("@ss.hasPermi('exam:exam:query')")
+    @PreAuthorize("@ss.hasAnyPermi('exam:exam:query,exam:exam:edit')")
     @GetMapping("/{examId}/studentIds")
     public AjaxResult getStudentIds(@PathVariable Long examId) {
         List<Long> ids = cyanExamInfoService.selectStudentIdsByExamId(examId);
@@ -92,13 +92,13 @@ public class CyanExamInfoController extends BaseController {
     }
 
     // 获取考试已选择的试题ID列表
-    @PreAuthorize("@ss.hasPermi('exam:exam:query')")
+    @PreAuthorize("@ss.hasAnyPermi('exam:exam:query,exam:exam:edit')")
     @GetMapping("/{examId}/questionIds")
     public AjaxResult getQuestionIds(@PathVariable Long examId) {
         List<Long> ids = cyanExamInfoService.selectQuestionIdsByExamId(examId);
         return success(ids);
     }
-    @PreAuthorize("@ss.hasPermi('exam:exam:query')")
+    @PreAuthorize("@ss.hasAnyPermi('exam:exam:query,exam:exam:edit')")
     @GetMapping("/{examId}/questionPoints")
     public AjaxResult getQuestionPoints(@PathVariable Long examId) {
         return success(cyanExamInfoService.selectAssignedQuestions(examId));

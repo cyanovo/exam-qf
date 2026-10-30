@@ -28,16 +28,16 @@
     </update>
     <insert id="insertSnapshots">
         INSERT INTO exam_question_snapshot
-          (exam_id, question_id, sort, category, difficulty, question_type, title, sub_title, answer, max_score)
+          (exam_id, question_id, sort, category, difficulty, question_type, title, sub_title, answer, max_score, grading_rules, initial_code)
         VALUES
         <foreach collection="questions" item="q" index="position" separator=",">
           (#{examId}, #{q.questionId}, #{position}, #{q.category}, #{q.difficulty},
-           #{q.questionType}, #{q.title}, #{q.subTitle}, #{q.answer}, #{q.maxScore})
+           #{q.questionType}, #{q.title}, #{q.subTitle}, #{q.answer}, #{q.maxScore}, #{q.gradingRules}, #{q.initialCode})
         </foreach>
     </insert>
     <select id="selectSnapshots" parameterType="Long" resultType="com.cyan.exam.system.domain.CyanQuestion">
         SELECT question_id AS questionId, category, difficulty, question_type AS questionType,
-               title, sub_title AS subTitle, answer, max_score AS maxScore
+               title, sub_title AS subTitle, answer, max_score AS maxScore, grading_rules AS gradingRules, initial_code AS initialCode
         FROM exam_question_snapshot WHERE exam_id = #{examId} ORDER BY sort, question_id
     </select>
     <select id="containsSnapshot" resultType="int">

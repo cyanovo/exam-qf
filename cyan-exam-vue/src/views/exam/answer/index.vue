@@ -4,22 +4,48 @@
     <div class="question-panel">
       <div class="exam-header">
         <h2>{{ examName }}</h2>
-        <div class="question-progress">{{ currentIndex + 1 }} / {{ questions.length }}</div>
+        <div class="question-progress">{{ questions.length ? currentIndex + 1 : 0 }} / {{ questions.length }}</div>
       </div>
 
-      <div class="question-card" v-if="currentQuestion">
+      <div v-if="!loaded" class="question-card question-state">
+        <el-skeleton v-if="loading" :rows="5" animated />
+        <el-result v-else icon="warning" title="试卷暂时无法加载" sub-title="请检查网络后重试，已保存的答案不会丢失">
+          <template #extra><el-button type="primary" @click="fetchQuestions">重新加载</el-button></template>
+        </el-result>
+      </div>
+      <div v-else-if="!currentQuestion" class="question-card question-state">
+        <el-empty description="这场考试暂无题目，请联系监考老师" />
+      </div>
+      <div class="question-card" v-else>
+        <h3 v-if="currentQuestion.section">{{ currentQuestion.section }}</h3>
+        <p v-if="currentQuestion.sectionDescription" class="chapter-text">{{ currentQuestion.sectionDescription }}</p>
         <div class="question-type-badge">
           {{ typeLabel(currentQuestion.questionType) }}
         </div>
         <h3 class="question-title">{{ currentQuestion.title }}</h3>
+        <p v-if="currentQuestion.questionType === 'PYTHON'" class="chapter-text python-description">{{ currentQuestion.description }}</p>
+        <el-alert v-if="currentQuestion.hint" class="question-hint" :title="`提示：${currentQuestion.hint}`" type="info" show-icon :closable="false" />
+        <div v-if="currentQuestion.questionType==='ONSITE'">
+          <p class="chapter-text">{{ currentQuestion.description }}</p>
+          <p>满分 {{ currentQuestion.maxScore }}</p>
+          <PythonWorkbench :key="currentQuestion.questionId" :model-value="localAnswer"
+            :exam-id="examId" :question-id="currentQuestion.id" manual
+            :disabled="!canEdit || currentQuestion.codeLocked"
+            @submitted="submission => practicalSubmitted(currentQuestion, submission)"
+            @busy="value => submittingCode = value"
+            @update:model-value="value => { localAnswer = value; onTextInput(value) }" />
+        </div>
 
         <!-- 单选题 -->
-        <div v-if="['SINGLE_CHOICE', 'JUDGE'].includes(currentQuestion.questionType)" class="options-list">
-          <div
+        <div v-else-if="['SINGLE_CHOICE', 'JUDGE'].includes(currentQuestion.questionType)" class="options-list">
+          <button
             v-for="opt in currentQuestion.options"
             :key="opt.label"
+            type="button"
             class="option-item"
             :class="{ 'selected': localAnswer === opt.label }"
+            :disabled="!canEdit || switching"
+            :aria-pressed="localAnswer === opt.label"
             @click="selectSingleOption(opt.label)"
           >
             <div class="option-radio" :class="{ 'checked': localAnswer === opt.label }">
@@ -29,16 +55,19 @@
               <span class="option-label">{{ opt.label }}.</span>
               <span>{{ opt.content }}</span>
             </div>
-          </div>
+          </button>
         </div>
 
         <!-- 多选题 -->
         <div v-else-if="currentQuestion.questionType === 'MULTI_CHOICE'" class="options-list">
-          <div
+          <button
             v-for="opt in currentQuestion.options"
             :key="opt.label"
+            type="button"
             class="option-item"
             :class="{ 'selected': multiSelected.includes(opt.label) }"
+            :disabled="!canEdit || switching"
+            :aria-pressed="multiSelected.includes(opt.label)"
             @click="toggleMultiOption(opt.label)"
           >
             <div class="option-checkbox" :class="{ 'checked': multiSelected.includes(opt.label) }">
@@ -48,13 +77,15 @@
               <span class="option-label">{{ opt.label }}.</span>
               <span>{{ opt.content }}</span>
             </div>
-          </div>
+          </button>
         </div>
 
         <PythonWorkbench v-else-if="currentQuestion.questionType === 'PYTHON'"
           :key="currentQuestion.questionId" :model-value="localAnswer"
           :exam-id="examId" :question-id="currentQuestion.questionId" :disabled="!canEdit"
-          :samples="currentQuestion.samples" :snapshot-hash="currentQuestion.snapshotHash"
+          :samples="currentQuestion.samples" :snapshot-hash="currentQuestion.snapshotHash" :max-score="currentQuestion.maxScore"
+          :save-draft="savePythonDraft"
+          @busy="value => submittingCode = value"
           @update:model-value="value => { localAnswer = value; onTextInput(value) }" />
         <!-- 填空/简答题 -->
         <div v-else class="text-answer">
@@ -62,7 +93,7 @@
             v-model="localAnswer"
             :disabled="!canEdit"
             class="answer-textarea"
-            placeholder="不同的空用;隔开"
+            :placeholder="currentQuestion.questionType === 'FILL_BLANK' ? '不同的空用;隔开' : '请输入答案'"
             @input="onTextInput($event.target.value)"
             @blur="onAnswerChange"
           ></textarea>
@@ -70,10 +101,10 @@
       </div>
 
       <div class="nav-buttons">
-        <button class="nav-btn" :disabled="currentIndex === 0" @click="prevQuestion">
+        <button class="nav-btn" :disabled="!canEdit || switching || submittingCode || currentIndex === 0" @click="prevQuestion">
           <span class="arrow">←</span> 上一题
         </button>
-        <button class="nav-btn" :disabled="currentIndex === questions.length - 1" @click="nextQuestion">
+        <button class="nav-btn" :disabled="!canEdit || switching || submittingCode || currentIndex >= questions.length - 1" @click="nextQuestion">
           下一题 <span class="arrow">→</span>
         </button>
       </div>
@@ -82,9 +113,11 @@
     <!-- 右侧：信息面板 -->
     <div class="info-panel">
       <div class="timer-card">
+        <el-button @click="router.push(`/exam/dossier/${examId}`)">异常与材料</el-button>
+        <el-popover v-if="instructions" title="考试说明" width="300" trigger="click"><template #reference><el-button link>考试说明</el-button></template><p class="chapter-text">{{ instructions }}</p></el-popover>
         <div class="timer-label">剩余时间</div>
         <div class="timer-value">{{ remainingTime }}</div>
-        <el-button type="primary" :disabled="!loaded || confirming || finishing || finished" @click="finishExam(false)">
+        <el-button type="primary" :disabled="!loaded || confirming || finishing || finished || submittingCode" @click="finishExam(false)">
           {{ finished ? '已交卷' : '交卷' }}
         </el-button>
         <div v-if="savingAnswer" class="save-status">正在保存答案…</div>
@@ -98,14 +131,20 @@
         <div v-if="finishError" class="save-error">交卷未确认，请重试交卷</div>
       </div>
 
+      <ExamCamera v-if="loaded && !finished && !expired" />
+
       <div class="question-nav-card">
-        <div class="nav-title">答题卡</div>
+        <div class="nav-title">答题卡 <span class="answered-count">{{ answeredCount }} / {{ questions.length }} 已答</span></div>
         <div class="question-grid">
           <button
             v-for="(q, idx) in questions"
             :key="q.questionId"
             class="q-btn"
-            :class="{ 'current': currentIndex === idx, 'answered': q.userAnswer }"
+            :class="{ 'current': currentIndex === idx, 'answered': isAnswered(q), 'pending': isPending(q) }"
+            :disabled="!canEdit || switching || submittingCode"
+            :title="`${typeLabel(q.questionType)}：${q.title}`"
+            :aria-label="`第 ${idx + 1} 题，${typeLabel(q.questionType)}，${isAnswered(q) ? '已答' : '未答'}${isPending(q) ? '，待保存' : ''}`"
+            :aria-current="currentIndex === idx ? 'step' : undefined"
             @click="switchQuestion(idx)"
           >
             {{ idx + 1 }}
@@ -122,6 +161,7 @@ import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAnswerSaver } from './useAnswerSaver'
+import ExamCamera from './ExamCamera.vue'
 const PythonWorkbench = defineAsyncComponent(() => import('./PythonWorkbench.vue'))
 
 const route = useRoute()
@@ -132,21 +172,29 @@ const questions = ref([])
 const currentIndex = ref(0)
 const endTime = ref(null)
 const now = ref(new Date())
+const instructions = ref('')
+let clockOffset = 0
 let timer = null
 let autosaveTimer = null
 let inputTimer = null
 let switching = false
 let disposed = false
 const loaded = ref(false)
+const loading = ref(true)
 const finished = ref(false)
 const finishing = ref(false)
 const confirming = ref(false)
+const submittingCode = ref(false)
 const finishError = ref(false)
 const expired = computed(() => endTime.value && now.value.getTime() >= endTime.value.getTime())
 const canEdit = computed(() => loaded.value && !finished.value && !finishing.value && !expired.value)
 const { stage, flush, saving: savingAnswer, error: saveError, dirty } = useAnswerSaver(
   (questionId, answer) => {
     if (finished.value || expired.value || disposed) return Promise.reject(new Error('Answer editing closed'))
+    if (String(questionId).startsWith('ONSITE-')) {
+      return request.put(`/exam/practical/${examId.value}/${String(questionId).slice(7)}/draft`,
+        { source: answer }, { headers: { repeatSubmit: false } })
+    }
     return request.post('/exam/student/submitAnswer', {
       examId: examId.value, questionId, answer
     }, { headers: { repeatSubmit: false } })
@@ -156,6 +204,21 @@ const { stage, flush, saving: savingAnswer, error: saveError, dirty } = useAnswe
 const currentQuestion = computed(() => questions.value[currentIndex.value] || null)
 const localAnswer = ref('')
 const multiSelected = ref([])   // 多选题临时选中的标签数组
+const answeredCount = computed(() => questions.value.filter(isAnswered).length)
+
+function isAnswered(question) {
+  const answer = question.questionId === currentQuestion.value?.questionId
+    ? question.questionType === 'MULTI_CHOICE' ? multiSelected.value.join(',') : localAnswer.value
+    : question.userAnswer
+  if (question.questionType === 'PYTHON' && answer === (question.initialCode || '') && !question.userAnswer) return false
+  return Boolean(String(answer ?? '').trim())
+}
+
+function isPending(question) {
+  if (question.questionId !== currentQuestion.value?.questionId) return false
+  const answer = question.questionType === 'MULTI_CHOICE' ? multiSelected.value.join(',') : localAnswer.value
+  return answer !== (question.userAnswer || '')
+}
 
 const remainingTime = computed(() => {
   if (!endTime.value) return '--:--:--'
@@ -176,37 +239,56 @@ const typeLabel = (type) => {
     FILL_BLANK: '填空题',
     SHORT_ANSWER: '简答题',
     PYTHON: 'Python 编程题'
+    ,ONSITE: '机器人实操编程题'
   }
   return map[type] || type
 }
 
 async function fetchQuestions() {
+  if (loading.value && loaded.value) return
+  loading.value = true
   try {
     const session = await request.post(`/exam/student/${examId.value}/session`, null, {
       headers: { repeatSubmit: false }
     })
     if (session.data.status !== 'IN_PROGRESS') {
       finished.value = true
+      loading.value = false
       ElMessage.info('这场考试已交卷')
+      router.replace('/exam/wait')
       return
     }
   } catch (e) {
-    ElMessage.error('无法进入考试')
+    loading.value = false
     return
   }
-  request.get('/exam/student/questions', { params: { examId: examId.value } }).then(res => {
+  try {
+    const res = await request.get('/exam/student/questions', { params: { examId: examId.value } })
     const data = res.data
     examName.value = data.examName || ''
-    questions.value = data.questions || []
+    instructions.value = data.policy?.instructions || ''
+    const entries = data.policy?.entries || []
+    const merged = [...(data.questions || []), ...(data.onsiteTasks || []).map(t=>({
+      ...t,questionId:`ONSITE-${t.id}`,questionType:'ONSITE'
+    }))]
+    for (const q of merged) {
+      const e=entries.find(e=>e.kind===(q.questionType==='ONSITE'?'ONSITE':'QUESTION') && e.id===(q.questionType==='ONSITE'?q.id:q.questionId))
+      if(e) Object.assign(q,{section:e.section,sectionDescription:e.description,hint:e.hint})
+    }
+    const order=q=>{const i=entries.findIndex(e=>e.kind===(q.questionType==='ONSITE'?'ONSITE':'QUESTION')&&e.id===(q.questionType==='ONSITE'?q.id:q.questionId));return i<0?9999:i}
+    questions.value = merged.sort((a,b)=>order(a)-order(b))
+    clockOffset=data.serverTime?new Date(data.serverTime).getTime()-Date.now():0
+    now.value=new Date(Date.now()+clockOffset)
     endTime.value = data.endTime ? new Date(data.endTime) : null
     loaded.value = true
+    loading.value = false
     if (questions.value.length > 0) {
       // 初始化当前题目的答案显示
       loadAnswerForCurrent()
     }
-  }).catch(() => {
-    alert('获取试卷失败，请重试')
-  })
+  } catch {
+    loading.value = false
+  }
 }
 
 // 根据当前题目类型加载答案到 localAnswer 或 multiSelected
@@ -218,7 +300,8 @@ function loadAnswerForCurrent() {
     multiSelected.value = q.userAnswer ? q.userAnswer.split(',').filter(s => s) : []
     localAnswer.value = ''
   } else {
-    localAnswer.value = q.userAnswer || ''
+    localAnswer.value = q.userAnswer !== undefined && q.userAnswer !== null && q.userAnswer !== ''
+      ? q.userAnswer : q.questionType === 'PYTHON' ? q.initialCode || '' : ''
     if (q.questionType === 'JUDGE' && !q.options?.some(option => option.label === localAnswer.value)) {
       const matches = (q.options || []).filter(option => option.content === localAnswer.value)
       if (matches.length === 1) localAnswer.value = matches[0].label
@@ -227,8 +310,15 @@ function loadAnswerForCurrent() {
   }
 }
 
-function stageCurrentAnswer() {
-  if (!currentQuestion.value || finished.value) return
+function practicalSubmitted(question, submission) {
+  question.submissionId = submission.id
+  question.submittedSource = submission.source
+}
+
+function stageCurrentAnswer(forceTemplate = false) {
+  if (!currentQuestion.value || finished.value || currentQuestion.value.codeLocked) return
+  if (!forceTemplate && currentQuestion.value.questionType === 'PYTHON' && !currentQuestion.value.userAnswer
+      && localAnswer.value === (currentQuestion.value.initialCode || '')) return
   stage(currentQuestion.value, currentQuestion.value.questionType === 'MULTI_CHOICE'
     ? multiSelected.value.join(',') : localAnswer.value)
 }
@@ -238,14 +328,30 @@ function saveCurrentAnswer() {
   stageCurrentAnswer()
   return flush()
 }
+function savePythonDraft() {
+  clearTimeout(inputTimer)
+  stageCurrentAnswer(true)
+  return flush()
+}
 
 async function finishExam(auto = false) {
   if (!loaded.value || finishing.value || finished.value || disposed) return
   if (!auto) {
+    if (submittingCode.value) return
+    const pending = questions.value.filter(q => q.questionType === 'ONSITE' && !q.codeLocked
+      && (q.questionId === currentQuestion.value?.questionId ? localAnswer.value : q.userAnswer || '') !== (q.submittedSource || ''))
+    if (pending.length) {
+      ElMessage.warning('有实操代码尚未正式提交，请先在对应题目点击“提交代码”后交卷')
+      return
+    }
     if (confirming.value) return
     confirming.value = true
     try {
-      await ElMessageBox.confirm('交卷后无法继续修改答案，确认交卷？', '确认交卷')
+      const unanswered = questions.value.length - answeredCount.value
+      await ElMessageBox.confirm(
+        unanswered ? `还有 ${unanswered} 题未作答。交卷后无法继续修改答案，确认交卷？` : '交卷后无法继续修改答案，确认交卷？',
+        '确认交卷'
+      )
     } catch {
       return
     } finally {
@@ -320,7 +426,7 @@ function onTextInput(answer) {
 
 // 切换题目
 async function switchQuestion(index) {
-  if (index === currentIndex.value || switching || !canEdit.value) return
+  if (index === currentIndex.value || switching || submittingCode.value || !canEdit.value) return
   switching = true
   try {
     if (!await saveCurrentAnswer() || !canEdit.value) return
@@ -348,7 +454,7 @@ onMounted(() => {
     else if (canEdit.value) saveCurrentAnswer()
   }, 8000)
   timer = setInterval(() => {
-    now.value = new Date()
+    now.value = new Date(Date.now()+clockOffset)
     if (expired.value) {
       if (!finishError.value) finishExam(true)
     }
@@ -370,14 +476,14 @@ function retryOnReconnect() {
 }
 
 function preventUnsavedLeave(event) {
-  if (finished.value || (!dirty.value && !savingAnswer.value && !finishing.value)) return
+  if (finished.value || (!dirty.value && !savingAnswer.value && !finishing.value && !submittingCode.value)) return
   event.preventDefault()
   event.returnValue = ''
 }
 
 onBeforeRouteLeave(async () => {
   if (finished.value) return true
-  if (finishing.value) return false
+  if (finishing.value || submittingCode.value) return false
   if (!dirty.value && !savingAnswer.value) return true
   try {
     await ElMessageBox.confirm('有尚未确认保存的答案，离开可能丢失，确认离开？', '离开考试')
@@ -389,10 +495,14 @@ onBeforeRouteLeave(async () => {
 </script>
 
 <style scoped>
+.chapter-text {white-space:pre-wrap;overflow-wrap:anywhere}
+.question-hint {margin-bottom:16px;color:var(--el-text-color-regular);background:var(--el-fill-color-light)}
+.question-hint :deep(.el-alert__title) {overflow-wrap:anywhere;white-space:pre-wrap}
 .exam-answer {
   display: flex;
   height: 100vh; /* 改为 100vh，通过 padding 防止被顶部导航遮挡，实际会被框架的导航栏覆盖？ */
-  background: linear-gradient(135deg, #f0f4f8 0%, #e2e8f0 100%);
+  background: var(--el-bg-color-page);
+  color: var(--el-text-color-primary);
   padding: 20px;
   gap: 20px;
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
@@ -421,29 +531,31 @@ onBeforeRouteLeave(async () => {
   overflow-wrap: anywhere;
   font-size: 24px;
   font-weight: 600;
-  color: #1e293b;
+  color: var(--el-text-color-primary);
   margin: 0;
 }
 
 .question-progress {
   font-size: 14px;
-  color: #64748b;
-  background: rgba(255,255,255,0.7);
+  color: var(--el-text-color-regular);
+  background: var(--el-bg-color);
   padding: 4px 12px;
   border-radius: 20px;
   backdrop-filter: blur(5px);
 }
 
 .question-card {
-  background: rgba(255,255,255,0.8);
+  background: var(--el-bg-color);
   backdrop-filter: blur(10px);
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 30px;
   box-shadow: 0 8px 32px rgba(0,0,0,0.06);
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid var(--el-border-color-light);
   flex: 1;
   overflow-y: auto;
 }
+.question-state { display: flex; align-items: center; justify-content: center; }
+.question-state :deep(.el-skeleton) { width: 100%; }
 
 .question-type-badge {
   display: inline-block;
@@ -459,7 +571,7 @@ onBeforeRouteLeave(async () => {
 .question-title {
   font-size: 20px;
   font-weight: 600;
-  color: #0f172a;
+  color: var(--el-text-color-primary);
   line-height: 1.5;
   margin: 0 0 24px;
 }
@@ -471,22 +583,27 @@ onBeforeRouteLeave(async () => {
 }
 
 .option-item {
+  width: 100%;
+  text-align: left;
+  font: inherit;
   display: flex;
   align-items: center;
   gap: 14px;
   padding: 16px 20px;
   border-radius: 16px;
-  background: #f8fafc;
-  border: 1px solid #e2e8f0;
+  background: var(--el-fill-color-light);
+  border: 1px solid var(--el-border-color-light);
   cursor: pointer;
   transition: all 0.2s ease;
 }
+.option-item:disabled { cursor: not-allowed; opacity: 0.7; }
+.option-item:focus-visible, .q-btn:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: 2px; }
 .option-item:hover {
-  background: #f1f5f9;
-  border-color: #cbd5e1;
+  background: var(--el-fill-color);
+  border-color: var(--el-border-color);
 }
 .option-item.selected {
-  background: #eff6ff;
+  background: var(--el-fill-color-dark);
   border-color: #3b82f6;
   box-shadow: 0 4px 12px rgba(59,130,246,0.15);
 }
@@ -539,13 +656,13 @@ onBeforeRouteLeave(async () => {
 
 .option-content {
   font-size: 16px;
-  color: #334155;
+  color: var(--el-text-color-regular);
   line-height: 1.4;
 }
 .option-label {
   font-weight: 600;
   margin-right: 6px;
-  color: #1e293b;
+  color: var(--el-text-color-primary);
 }
 
 .text-answer {
@@ -556,8 +673,9 @@ onBeforeRouteLeave(async () => {
   min-height: 180px;
   padding: 16px;
   border-radius: 16px;
-  border: 1px solid #e2e8f0;
-  background: #f8fafc;
+  border: 1px solid var(--el-border-color-light);
+  background: var(--el-fill-color-light);
+  color: var(--el-text-color-primary);
   font-size: 16px;
   resize: vertical;
   outline: none;
@@ -566,7 +684,7 @@ onBeforeRouteLeave(async () => {
 }
 .answer-textarea:focus {
   border-color: #3b82f6;
-  background: white;
+  background: var(--el-bg-color);
 }
 
 .nav-buttons {
@@ -578,19 +696,19 @@ onBeforeRouteLeave(async () => {
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: rgba(255,255,255,0.8);
+  background: var(--el-bg-color);
   backdrop-filter: blur(5px);
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid var(--el-border-color-light);
   border-radius: 16px;
   font-size: 15px;
   font-weight: 500;
-  color: #334155;
+  color: var(--el-text-color-regular);
   cursor: pointer;
   transition: all 0.2s;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 .nav-btn:hover:not(:disabled) {
-  background: white;
+  background: var(--el-fill-color-light);
   box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 .nav-btn:disabled {
@@ -607,47 +725,53 @@ onBeforeRouteLeave(async () => {
   display: flex;
   flex-direction: column;
   gap: 20px;
+  overflow-y: auto;
 }
 
 .timer-card {
-  background: rgba(255,255,255,0.75);
+  background: var(--el-bg-color);
   backdrop-filter: blur(15px);
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 24px;
   text-align: center;
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid var(--el-border-color-light);
   box-shadow: 0 8px 32px rgba(0,0,0,0.06);
 }
 .timer-label {
   font-size: 14px;
-  color: #64748b;
+  color: var(--el-text-color-regular);
   margin-bottom: 8px;
   font-weight: 500;
 }
 .timer-value {
   font-size: 32px;
   font-weight: 700;
-  color: #0f172a;
-  letter-spacing: 1px;
+  color: var(--el-text-color-primary);
+  letter-spacing: 0;
 }
-.save-error { color: #b42318; font-size: 13px; margin-top: 12px; }
-.save-status { color: #475569; font-size: 13px; margin-top: 12px; }
+.save-error { color: var(--el-color-danger); font-size: 13px; margin-top: 12px; }
+.save-status { color: var(--el-text-color-regular); font-size: 13px; margin-top: 12px; }
 
 .question-nav-card {
-  background: rgba(255,255,255,0.75);
+  background: var(--el-bg-color);
   backdrop-filter: blur(15px);
-  border-radius: 24px;
+  border-radius: 8px;
   padding: 20px;
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid var(--el-border-color-light);
   box-shadow: 0 8px 32px rgba(0,0,0,0.06);
   flex: 1;
 }
 .nav-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   font-size: 14px;
   font-weight: 600;
-  color: #64748b;
+  color: var(--el-text-color-regular);
   margin-bottom: 16px;
 }
+.answered-count { font-weight: 400; font-size: 12px; white-space: nowrap; }
 .question-grid {
   display: flex;
   flex-wrap: wrap;
@@ -683,9 +807,11 @@ onBeforeRouteLeave(async () => {
   background: #3b82f6;
   color: white;
 }
+.q-btn.pending { border-style: dashed; border-width: 2px; }
+.q-btn:disabled { cursor: not-allowed; }
 @media (max-width: 760px) {
   .exam-answer { flex-direction: column; height: auto; min-height: 100dvh; overflow: visible; padding: 12px; gap: 12px; }
-  .info-panel { order: -1; width: 100%; gap: 12px; }
+  .info-panel { order: -1; width: 100%; gap: 12px; overflow: visible; }
   .timer-card { padding: 12px; border-radius: 8px; }
   .timer-value { font-size: 24px; letter-spacing: 0; }
   .question-nav-card { padding: 12px; border-radius: 8px; }

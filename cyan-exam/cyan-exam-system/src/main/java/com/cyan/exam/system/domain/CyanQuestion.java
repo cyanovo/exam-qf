@@ -42,6 +42,18 @@ public class CyanQuestion extends BaseEntity
     /** 答案（选择题：选项标签，如 A 或 A,B；判断题：对/错；填空题：关键答案，用分号分隔；简答题：参考答案文本） */
     @Excel(name = "答案")
     private String answer;
+    private String gradingRules;
+    private String initialCode;
+    private String reviewState;
+    private Integer revision;
+    public String getReviewState() { return reviewState; }
+    public void setReviewState(String reviewState) { this.reviewState = reviewState; }
+    public Integer getRevision() { return revision; }
+    public void setRevision(Integer revision) { this.revision = revision; }
+    public String getInitialCode() { return initialCode; }
+    public void setInitialCode(String initialCode) { this.initialCode = initialCode; }
+    public String getGradingRules() { return gradingRules; }
+    public void setGradingRules(String gradingRules) { this.gradingRules = gradingRules; }
 
     /** 状态（0启用 1停用） */
     @Excel(name = "状态", readConverterExp = "0=启用,1=停用")

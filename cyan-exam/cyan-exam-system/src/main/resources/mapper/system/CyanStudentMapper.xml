@@ -3,6 +3,10 @@
 PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.cyan.exam.system.mapper.CyanStudentMapper">
+    <!-- Historical student numbers remain reserved even if their login was deleted. -->
+    <select id="countByStudentNo" parameterType="String" resultType="int">
+        SELECT COUNT(*) FROM cyan_student WHERE student_no = #{studentNo}
+    </select>
     
     <resultMap type="CyanStudent" id="CyanStudentResult">
         <result property="studentId"    column="student_id"    />
@@ -21,13 +25,13 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
     </resultMap>
 
     <sql id="selectCyanStudentVo">
-        SELECT s.student_id, s.user_id, s.student_no, s.class_name, s.grade,
+        SELECT DISTINCT s.student_id, s.user_id, s.student_no, s.class_name, s.grade,
         u.user_name, u.nick_name, u.status, s.create_time
         FROM cyan_student s
         LEFT JOIN sys_user u ON s.user_id = u.user_id
         LEFT JOIN sys_user_role ur ON u.user_id = ur.user_id
         LEFT JOIN sys_role r ON ur.role_id = r.role_id
-        WHERE r.role_key = 'student'
+        WHERE r.role_key = 'student' AND u.del_flag = '0'
     </sql>
 
     <select id="selectCyanStudentList" parameterType="CyanStudent" resultMap="CyanStudentResult">

@@ -9,6 +9,7 @@ import useUserStore from '@/store/modules/user'
 import useLockStore from '@/store/modules/lock'
 import useSettingsStore from '@/store/modules/settings'
 import usePermissionStore from '@/store/modules/permission'
+import { isStudentOnly } from '@/utils/examIdentity'
 
 NProgress.configure({ showSpinner: false })
 
@@ -58,6 +59,15 @@ router.beforeEach(async (to, from) => {
         ElMessage.error(err)
         return { path: '/' }
       }
+    }
+    if (useUserStore().mustChangePassword && to.path !== '/change-password') {
+      NProgress.done()
+      return '/change-password'
+    }
+    if (isStudentOnly(useUserStore())
+        && (to.path.startsWith('/exam/onsite') || to.path.startsWith('/exam/grading'))) {
+      NProgress.done()
+      return '/index'
     }
     return true
   } else {

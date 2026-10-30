@@ -91,7 +91,7 @@ function resolvePath(routePath, routeQuery) {
 }
 
 function hasTitle(title){
-  if (title.length > 5) {
+  if (title && title.length > 5) {
     return title
   } else {
     return ""

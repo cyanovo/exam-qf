@@ -11,6 +11,8 @@ import com.cyan.exam.system.domain.CyanStudent;
  */
 public interface CyanStudentMapper 
 {
+    int countByStudentNo(String studentNo);
+
     /**
      * 查询学生扩展信息
      * 

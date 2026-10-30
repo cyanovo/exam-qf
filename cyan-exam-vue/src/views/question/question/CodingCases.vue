@@ -15,7 +15,8 @@
       <div class="io"><el-input v-model="item.input" type="textarea" placeholder="标准输入" :rows="3" @input="save" />
         <el-input v-model="item.expected" type="textarea" placeholder="预期输出" :rows="3" @input="save" /></div>
     </div>
-    <el-button icon="Plus" @click="add">添加测试点</el-button><span class="total">隐藏用例合计 {{ total }} 分</span>
+    <el-button icon="Plus" @click="add">添加测试点</el-button><span class="total">隐藏用例合计 {{ total }} 分（公开样例不计分）</span>
+    <el-alert v-if="warning" :title="warning" type="warning" :closable="false" class="case-warning" />
   </div>
 </template>
 <script setup>
@@ -30,6 +31,15 @@ watch(() => props.modelValue, value => {
   catch { cases.value = []; invalid.value = !!value }
 }, { immediate: true })
 const total = computed(() => cases.value.filter(c => !c.public).reduce((sum, c) => sum + (c.weight || 0), 0))
+const warning = computed(() => {
+  if (invalid.value) return ''
+  if (!cases.value.some(c => c.public)) return '发布前需要至少一个公开样例'
+  const hidden = cases.value.filter(c => !c.public)
+  if (hidden.length < 3) return '发布前至少需要3个隐藏测试点，覆盖不同输入与边界情况'
+  if (new Set(hidden.map(c => c.input)).size !== hidden.length) return '隐藏测试点的输入不能重复'
+  if (new Set(hidden.map(c => c.expected?.replace(/\r\n/g, '\n'))).size < 3) return '隐藏测试点至少需要3种不同的预期输出，避免固定输出获得满分'
+  return ''
+})
 function save() { last = JSON.stringify({ cases: cases.value }); emit('update:modelValue', last); invalid.value = false }
 function add() { cases.value.push({ input: '', expected: '', weight: cases.value.length ? 10 : 0, public: !cases.value.length, comparison: 'EXACT', tolerance: 0.001 }); save() }
 </script>
@@ -38,4 +48,5 @@ function add() { cases.value.push({ input: '', expected: '', weight: cases.value
 .case-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
 .case-toolbar .el-select { width: 120px; }.case-toolbar .el-input-number { width: 120px; }
 .io { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 10px; }.total { margin-left: 12px; }
+.case-warning { margin-top: 12px; }
 </style>

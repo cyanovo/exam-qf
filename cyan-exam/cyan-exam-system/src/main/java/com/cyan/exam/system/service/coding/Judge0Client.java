@@ -20,10 +20,15 @@ public class Judge0Client {
     @Value("${exam.judge.url:}") private String url;
     @Value("${exam.judge.token:}") private String token;
     @Value("${exam.judge.python-language-id:71}") private int languageId;
+    @Value("${exam.judge.provider:judge0}") private String provider = "judge0";
+    @Value("${exam.judge.runtime-id:unspecified}") private String runtimeId = "unspecified";
 
     public boolean enabled() { return enabled; }
+    public boolean synchronous() { return "go-judge".equals(provider); }
+    public String runtimeIdentity() { return provider + ":" + runtimeId; }
     public void requireConfigured() {
         if (!enabled || url.isBlank() || token.isBlank()) throw new ServiceException("独立评测服务未启用，请联系管理员");
+        if (!Set.of("judge0", "go-judge").contains(provider)) throw new ServiceException("未知评测服务类型");
         URI endpoint = URI.create(url);
         if (!Set.of("http", "https").contains(endpoint.getScheme()) || endpoint.getHost() == null
                 || endpoint.getUserInfo() != null || endpoint.getQuery() != null || endpoint.getFragment() != null) {
@@ -50,10 +55,52 @@ public class Judge0Client {
         return request("/submissions/" + id + "?base64_encoded=true&fields=status,stdout,stderr,compile_output,time,memory", null);
     }
 
+    public JSONObject run(String source, String input) throws Exception {
+        Map<String, Object> command = new LinkedHashMap<>();
+        command.put("args", List.of("/usr/local/bin/python3", "-I", "-B", "/w/main.py"));
+        command.put("env", List.of("PATH=/usr/local/bin:/usr/bin:/bin", "LANG=C.UTF-8", "HOME=/w"));
+        command.put("files", List.of(Map.of("content", input),
+                Map.of("name", "stdout", "max", 32768, "pipe", true),
+                Map.of("name", "stderr", "max", 32768, "pipe", true)));
+        command.put("copyIn", Map.of("main.py", Map.of("content", source)));
+        command.put("cpuLimit", 2_000_000_000L);
+        command.put("clockLimit", 5_000_000_000L);
+        command.put("memoryLimit", 134217728);
+        command.put("stackLimit", 67108864);
+        command.put("procLimit", 16);
+        command.put("copyOutMax", 65536);
+        var responses = JSON.parseArray(requestBody("/run", JSON.toJSONString(Map.of("cmd", List.of(command)))));
+        if (responses == null || responses.size() != 1) throw new IllegalStateException("Invalid runner response");
+        var raw = responses.getJSONObject(0);
+        String verdict = raw.getString("status");
+        if (verdict == null) throw new IllegalStateException("Missing runner verdict");
+        int status = switch (verdict) {
+            case "Accepted" -> 3;
+            case "Time Limit Exceeded" -> 5;
+            case "Memory Limit Exceeded", "Output Limit Exceeded", "Nonzero Exit Status", "Non Zero Exit Status",
+                    "Signalled", "Dangerous Syscall" -> 11;
+            default -> 13;
+        };
+        JSONObject result = new JSONObject();
+        result.put("status", Map.of("id", status));
+        result.put("verdict", verdict);
+        JSONObject files = raw.getJSONObject("files");
+        result.put("stdout", encode(files == null ? "" : Objects.toString(files.get("stdout"), "")));
+        result.put("stderr", encode(files == null ? "" : Objects.toString(files.get("stderr"), "")));
+        result.put("time", raw.getLongValue("time") / 1_000_000_000.0);
+        result.put("memory", raw.getLongValue("memory") / 1024);
+        return result;
+    }
+
     private JSONObject request(String path, String body) throws Exception {
+        return JSON.parseObject(requestBody(path, body));
+    }
+
+    private String requestBody(String path, String body) throws Exception {
         requireConfigured();
         HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(url.replaceAll("/+$", "") + path))
-                .timeout(Duration.ofSeconds(8)).header("X-Auth-Token", token).header("Content-Type", "application/json");
+                .timeout(Duration.ofSeconds(8)).header(synchronous() ? "Authorization" : "X-Auth-Token",
+                        synchronous() ? "Bearer " + token : token).header("Content-Type", "application/json");
         if (body != null) builder.POST(HttpRequest.BodyPublishers.ofString(body));
         else builder.GET();
         // Read a bounded stream: a malfunctioning runner must not exhaust the business server.
@@ -67,11 +114,12 @@ public class Judge0Client {
             try { response.body().close(); } catch (java.io.IOException ignored) { }
         }, 8, TimeUnit.SECONDS);
         try (var input = response.body()) {
-            byte[] bytes = input.readNBytes(262145);
-            if (response.statusCode() < 200 || response.statusCode() >= 300 || bytes.length > 262144) {
+            int limit = synchronous() ? 524288 : 262144;
+            byte[] bytes = input.readNBytes(limit + 1);
+            if (response.statusCode() < 200 || response.statusCode() >= 300 || bytes.length > limit) {
                 throw new IllegalStateException("Runner request failed");
             }
-            return JSON.parseObject(new String(bytes, StandardCharsets.UTF_8));
+            return new String(bytes, StandardCharsets.UTF_8);
         } finally {
             timeout.cancel(false);
             deadline.shutdownNow();

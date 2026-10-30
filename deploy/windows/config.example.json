@@ -1,0 +1,23 @@
+{
+  "Java": "D:/java/jdk25/bin/java.exe",
+  "Node": "D:/app/nodejs/node.exe",
+  "Mysql": "D:/app/mysql-8.0.45-winx64/bin/mysql.exe",
+  "Mysqldump": "D:/app/mysql-8.0.45-winx64/bin/mysqldump.exe",
+  "DatabaseHost": "127.0.0.1",
+  "DatabasePort": 3306,
+  "Database": "cyan_exam_python_demo_20261029",
+  "DatabaseUser": "root",
+  "DatabasePassword": "",
+  "RedisHost": "127.0.0.1",
+  "RedisPort": 6379,
+  "RedisDatabase": 6,
+  "RedisPassword": "",
+  "RedisExecutable": "Redis-x64-5.0.14.1/redis-server.exe",
+  "ApiPort": 8190,
+  "WebPort": 5190,
+  "Profile": "D:/app/cyan-exam/python-demo-uploads",
+  "JudgeUrl": "http://127.0.0.1:15050",
+  "JudgeTokenFile": "D:/app/cyan-exam/sandbox-token.key",
+  "JudgeContainers": ["cyan-python-demo", "cyan-python-gateway"],
+  "TokenSecret": ""
+}

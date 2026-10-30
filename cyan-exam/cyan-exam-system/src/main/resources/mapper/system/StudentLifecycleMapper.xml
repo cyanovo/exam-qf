@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.cyan.exam.system.mapper.StudentLifecycleMapper">
+    <!-- Keep the original identity whenever any exam data still refers to it. -->
+    <sql id="unusedDeletedStudent">
+        EXISTS (SELECT 1 FROM sys_user u WHERE u.user_id=s.user_id AND u.del_flag='2')
+        AND NOT EXISTS (SELECT 1 FROM exam_student x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_session x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_answer_record x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_code_submission x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_onsite_code_draft x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_onsite_code_submission x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_onsite_score x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_onsite_event x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_score_revision x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_incident x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_file_asset x WHERE x.user_id=s.user_id)
+        AND NOT EXISTS (SELECT 1 FROM exam_result_version x
+            WHERE JSON_CONTAINS(x.payload, JSON_OBJECT('userId',s.user_id), '$.rows'))
+    </sql>
+    <delete id="releaseDeletedStudentByUserId">
+        DELETE s FROM cyan_student s WHERE s.user_id=#{userId}
+        AND <include refid="unusedDeletedStudent"/>
+    </delete>
+    <delete id="releaseDeletedStudentByNumber">
+        DELETE s FROM cyan_student s WHERE s.student_no=#{studentNo}
+        AND <include refid="unusedDeletedStudent"/>
+    </delete>
+</mapper>

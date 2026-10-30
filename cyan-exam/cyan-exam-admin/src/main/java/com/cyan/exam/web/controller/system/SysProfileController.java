@@ -94,6 +94,11 @@ public class SysProfileController extends BaseController
     {
         String oldPassword = params.get("oldPassword");
         String newPassword = params.get("newPassword");
+        if (oldPassword == null || newPassword == null || newPassword.length() < 10
+                || newPassword.length() > 64 || !newPassword.matches(".*[A-Za-z].*")
+                || !newPassword.matches(".*[0-9].*") || !newPassword.matches(".*[^A-Za-z0-9].*")) {
+            return error("新密码须为10至64位，并包含字母、数字和特殊字符");
+        }
         LoginUser loginUser = getLoginUser();
         Long userId = loginUser.getUserId();
         SysUser user = userService.selectUserById(userId);

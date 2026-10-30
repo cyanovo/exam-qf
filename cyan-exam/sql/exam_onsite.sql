@@ -1,0 +1,40 @@
+CREATE TABLE IF NOT EXISTS exam_onsite_task (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  exam_id BIGINT NOT NULL,
+  title VARCHAR(120) NOT NULL,
+  description TEXT NOT NULL,
+  duration_minutes INT NOT NULL,
+  judge_id BIGINT NOT NULL,
+  rubric TEXT NOT NULL,
+  max_score INT NOT NULL,
+  state VARCHAR(16) NOT NULL DEFAULT 'DRAFT',
+  created_by BIGINT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_onsite_exam (exam_id),
+  KEY idx_onsite_judge (judge_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS exam_onsite_score (
+  task_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  judge_id BIGINT NOT NULL,
+  points TEXT NOT NULL,
+  note VARCHAR(1000) NOT NULL,
+  total INT NOT NULL,
+  state VARCHAR(16) NOT NULL DEFAULT 'DRAFT',
+  revision INT NOT NULL DEFAULT 1,
+  updated_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  PRIMARY KEY (task_id,user_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS exam_onsite_event (
+  id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  task_id BIGINT NOT NULL,
+  user_id BIGINT NULL,
+  actor_id BIGINT NOT NULL,
+  action VARCHAR(32) NOT NULL,
+  reason VARCHAR(1000) NOT NULL,
+  payload MEDIUMTEXT NOT NULL,
+  created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+  KEY idx_onsite_event (task_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

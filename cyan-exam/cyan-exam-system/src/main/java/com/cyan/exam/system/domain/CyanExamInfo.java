@@ -16,6 +16,18 @@ public class CyanExamInfo extends BaseEntity {
 
     private Long examId;
     private Long ownerUserId;
+    private String policyJson;
+    private Integer durationMinutes = 0;
+    private Integer earlyEntryMinutes = 30;
+    private String lifecycle = "ACTIVE";
+    public String getPolicyJson() { return policyJson; }
+    public void setPolicyJson(String value) { policyJson = value; }
+    public Integer getDurationMinutes() { return durationMinutes; }
+    public void setDurationMinutes(Integer value) { durationMinutes = value; }
+    public Integer getEarlyEntryMinutes() { return earlyEntryMinutes; }
+    public void setEarlyEntryMinutes(Integer value) { earlyEntryMinutes = value; }
+    public String getLifecycle() { return lifecycle; }
+    public void setLifecycle(String value) { lifecycle = value; }
 
     @Excel(name = "考试名称")
     private String examName;

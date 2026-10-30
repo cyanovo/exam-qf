@@ -6,13 +6,13 @@
       <el-row :gutter="20" class="mb8">
         <el-col :span="12">
           <div class="info-item">
-            <label class="info-label">用户名称：</label>
+            <label class="info-label">姓名：</label>
             <span class="info-value plaintext">{{ info.nickName }}</span>
           </div>
         </el-col>
         <el-col :span="12">
           <div class="info-item">
-            <label class="info-label">归属部门：</label>
+            <label class="info-label">所属分组：</label>
             <span class="info-value plaintext">{{ (info.dept && info.dept.deptName) }}</span>
           </div>
         </el-col>
@@ -50,8 +50,8 @@
       <el-row :gutter="20" class="mb8">
         <el-col :span="12">
           <div class="info-item">
-            <label class="info-label">岗位：</label>
-            <span class="info-value plaintext">{{ postNames || '无岗位' }}</span>
+            <label class="info-label">考务岗位：</label>
+            <span class="info-value plaintext">{{ postNames || '无考务岗位' }}</span>
           </div>
         </el-col>
         <el-col :span="12">

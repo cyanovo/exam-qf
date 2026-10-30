@@ -125,6 +125,7 @@ public class ExamGradingServiceImpl implements IExamGradingService {
             item.put("type", q.getQuestionType());
             item.put("maxScore", q.getMaxScore());
             item.put("referenceAnswer", q.getAnswer());
+            item.put("gradingRules", q.getGradingRules());
             if ("SINGLE_CHOICE".equals(q.getQuestionType()) || "MULTI_CHOICE".equals(q.getQuestionType())
                     || "JUDGE".equals(q.getQuestionType())) {
                 if (q.getSubTitle() != null && !q.getSubTitle().isEmpty()) {
@@ -138,6 +139,7 @@ public class ExamGradingServiceImpl implements IExamGradingService {
                 item.put("studentAnswer", formal == null ? "" : formal.get("source"));
                 item.put("formalSubmissionId", formal == null ? null : formal.get("id"));
                 item.put("evaluationState", formal == null ? "NOT_SUBMITTED" : formal.get("state"));
+                item.put("runVersion", formal == null ? null : formal.get("runVersion"));
             }
             item.put("score", record != null && record.getGradedAt() != null ? record.getScore() : null);
             item.put("recordId", record != null ? record.getRecordId() : null);

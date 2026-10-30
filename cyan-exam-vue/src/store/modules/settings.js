@@ -1,10 +1,13 @@
 import defaultSettings from '@/settings'
-import { useDark, useToggle } from '@vueuse/core'
+import { useColorMode } from '@vueuse/core'
 import { useDynamicTitle } from '@/utils/dynamicTitle'
 import { handleThemeStyle } from '@/utils/theme'
 
-const isDark = useDark()
-const toggleDark = useToggle(isDark)
+// Migrate the former system-following preference to an explicit light theme.
+if (localStorage.getItem('vueuse-color-scheme') === 'auto') {
+  localStorage.setItem('vueuse-color-scheme', 'light')
+}
+const colorMode = useColorMode({ initialValue: 'light', modes: { light: '', dark: 'dark' } })
 
 const { sideTheme, showSettings, navType, tagsView, tagsViewPersist, tagsIcon, tagsViewStyle, fixedHeader, sidebarLogo, dynamicTitle, footerVisible, footerContent } = defaultSettings
 
@@ -28,7 +31,7 @@ const useSettingsStore = defineStore(
       dynamicTitle: storageSetting.dynamicTitle === undefined ? dynamicTitle : storageSetting.dynamicTitle,
       footerVisible: storageSetting.footerVisible === undefined ? footerVisible : storageSetting.footerVisible,
       footerContent: footerContent,
-      isDark: isDark.value
+      isDark: colorMode.value === 'dark'
     }),
     actions: {
       // 修改布局设置
@@ -45,8 +48,8 @@ const useSettingsStore = defineStore(
       },
       // 切换暗黑模式
       toggleTheme() {
-        this.isDark = !this.isDark
-        toggleDark()
+        colorMode.value = colorMode.value === 'dark' ? 'light' : 'dark'
+        this.isDark = colorMode.value === 'dark'
         nextTick(() => {
           handleThemeStyle(this.theme)
         })

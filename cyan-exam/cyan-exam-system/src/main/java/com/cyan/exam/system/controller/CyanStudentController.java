@@ -2,7 +2,6 @@ package com.cyan.exam.system.controller;
 
 import java.util.List;
 
-import com.cyan.exam.common.utils.StringUtils;
 import com.cyan.exam.system.domain.dto.CyanStudentImportDTO;
 import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -113,6 +112,6 @@ public class CyanStudentController extends BaseController
     @PostMapping("/import")
     public AjaxResult importStudents(@RequestBody CyanStudentImportDTO dto) {
         String msg = cyanStudentService.importStudents(dto);
-        return StringUtils.isEmpty(msg) ? success("创建成功") : error(msg);
+        return success(msg);
     }
 }

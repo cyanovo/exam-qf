@@ -4,6 +4,7 @@ import java.util.Set;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.Pattern;
 import org.apache.commons.lang3.builder.ToStringBuilder;
 import org.apache.commons.lang3.builder.ToStringStyle;
 import com.cyan.exam.common.annotation.Excel;
@@ -61,6 +62,12 @@ public class SysRole extends BaseEntity
     /** 部门组（数据权限） */
     private Long[] deptIds;
 
+    private Integer memberCount;
+
+    public Integer getMemberCount() { return memberCount; }
+
+    public void setMemberCount(Integer memberCount) { this.memberCount = memberCount; }
+
     /** 角色菜单权限 */
     private Set<String> permissions;
 
@@ -107,6 +114,7 @@ public class SysRole extends BaseEntity
     }
 
     @NotBlank(message = "权限字符不能为空")
+    @Pattern(regexp = "[A-Za-z][A-Za-z0-9_]*", message = "角色标识须以字母开头，只能包含字母、数字和下划线")
     @Size(min = 0, max = 100, message = "权限字符长度不能超过100个字符")
     public String getRoleKey()
     {

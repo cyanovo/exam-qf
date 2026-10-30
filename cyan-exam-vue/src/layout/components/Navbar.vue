@@ -1,14 +1,21 @@
 <template>
   <div class="navbar" :class="'nav' + settingsStore.navType">
-    <breadcrumb v-if="settingsStore.navType == 1" id="breadcrumb-container" class="breadcrumb-container" />
-    <top-nav v-if="settingsStore.navType == 2" id="topmenu-container" class="topmenu-container" />
-    <template v-if="settingsStore.navType == 3">
+    <el-tooltip v-if="!isStudent && !appStore.sidebar.hide" :disabled="appStore.device === 'mobile'" :content="appStore.sidebar.opened ? '收起菜单' : '展开菜单'" placement="bottom">
+      <button class="sidebar-toggle" type="button"
+        :aria-label="appStore.sidebar.opened ? '收起菜单' : '展开菜单'"
+        :aria-expanded="appStore.sidebar.opened" aria-controls="app-sidebar" @click="toggleSideBar">
+        <el-icon :size="20"><Fold v-if="appStore.sidebar.opened" /><Expand v-else /></el-icon>
+      </button>
+    </el-tooltip>
+    <breadcrumb v-if="isStudent || settingsStore.navType == 1" id="breadcrumb-container" class="breadcrumb-container" />
+    <top-nav v-if="!isStudent && settingsStore.navType == 2" id="topmenu-container" class="topmenu-container" />
+    <template v-if="!isStudent && settingsStore.navType == 3">
       <logo v-show="settingsStore.sidebarLogo" :collapse="false"></logo>
       <top-bar id="topbar-container" class="topbar-container" />
     </template>
 
     <div class="right-menu">
-      <template v-if="appStore.device !== 'mobile'">
+      <template v-if="!isStudent && appStore.device !== 'mobile'">
         <header-search id="header-search" class="right-menu-item" />
 
         
@@ -52,26 +59,25 @@
 
 <script setup>
 import { ElMessageBox } from 'element-plus'
+import { isStudentOnly } from '@/utils/examIdentity'
 import Breadcrumb from '@/components/Breadcrumb'
 import TopNav from './TopNav'
 import TopBar from './TopBar'
 import Logo from './Sidebar/Logo'
-import Hamburger from '@/components/Hamburger'
+import { Fold, Expand } from '@element-plus/icons-vue'
 import Screenfull from '@/components/Screenfull'
 import SizeSelect from '@/components/SizeSelect'
 import HeaderSearch from '@/components/HeaderSearch'
-import RuoYiGit from '@/components/RuoYi/Git'
-import RuoYiDoc from '@/components/RuoYi/Doc'
 import useAppStore from '@/store/modules/app'
 import useUserStore from '@/store/modules/user'
 import useLockStore from '@/store/modules/lock'
 import useSettingsStore from '@/store/modules/settings'
-import HeaderNotice from './HeaderNotice'
 
 const route = useRoute()
 const router = useRouter()
 const appStore = useAppStore()
 const userStore = useUserStore()
+const isStudent = computed(() => isStudentOnly(userStore))
 const lockStore = useLockStore()
 const settingsStore = useSettingsStore()
 
@@ -194,7 +200,27 @@ async function toggleTheme(event) {
   }
 
   .breadcrumb-container {
-    flex-shrink: 0;
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+  }
+
+  .sidebar-toggle {
+    flex: 0 0 44px;
+    width: 44px;
+    height: 40px;
+    margin: 0 6px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--navbar-text);
+    cursor: pointer;
+    &:hover { background: var(--el-fill-color-light); }
+    &:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
   }
 
   .topmenu-container {
@@ -258,9 +284,10 @@ async function toggleTheme(event) {
       padding-right: 0px;
 
       .avatar-wrapper {
-        margin-top: 10px;
-        right: 8px;
-        position: relative;
+        display: flex;
+        align-items: center;
+        height: 50px;
+        padding-right: 12px;
 
         .user-avatar {
           cursor: pointer;
@@ -271,9 +298,10 @@ async function toggleTheme(event) {
         }
 
         .user-nickname{
-          position: relative;
-          left: 0px;
-          bottom: 10px;
+          max-width: 120px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
           font-size: 14px;
           font-weight: bold;
         }
@@ -288,5 +316,8 @@ async function toggleTheme(event) {
       }
     }
   }
+}
+@media (max-width: 600px) {
+  .navbar .right-menu .avatar-container .user-nickname { max-width: 72px; }
 }
 </style>

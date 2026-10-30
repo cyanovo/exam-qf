@@ -25,4 +25,17 @@ public class CodeSubmissionController {
     @PreAuthorize("@ss.hasPermi('exam:grading:edit')")
     @Log(title = "重试系统评测失败", businessType = BusinessType.UPDATE)
     public AjaxResult retry(@PathVariable Long id) { service.retry(id); return AjaxResult.success(); }
+    public record RegradeRequest(int version, String reason) {}
+    @PostMapping("/submission/{id}/regrade")
+    @PreAuthorize("@ss.hasPermi('exam:grading:edit')")
+    @Log(title = "版本化重新评测", businessType = BusinessType.UPDATE)
+    public AjaxResult regrade(@PathVariable Long id, @RequestBody RegradeRequest body) {
+        service.regrade(id, body.version(), body.reason());
+        return AjaxResult.success();
+    }
+    @GetMapping("/{examId}/student/{userId}/history/{questionId}")
+    @PreAuthorize("@ss.hasPermi('exam:grading:detail')")
+    public AjaxResult teacherHistory(@PathVariable Long examId, @PathVariable Long userId, @PathVariable Long questionId) {
+        return AjaxResult.success(service.teacherHistory(examId, userId, questionId));
+    }
 }

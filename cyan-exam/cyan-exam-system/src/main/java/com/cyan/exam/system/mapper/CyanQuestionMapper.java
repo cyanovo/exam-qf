@@ -10,6 +10,7 @@ import com.cyan.exam.system.domain.CyanQuestion;
  */
 public interface CyanQuestionMapper
 {
+    CyanQuestion lockQuestion(Long questionId);
     /**
      * 查询题库列表
      */

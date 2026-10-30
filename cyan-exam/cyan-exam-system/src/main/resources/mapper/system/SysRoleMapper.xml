@@ -19,11 +19,15 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
 		<result property="updateBy"           column="update_by"             />
 		<result property="updateTime"         column="update_time"           />
 		<result property="remark"             column="remark"                />
+		<result property="memberCount"        column="member_count"          />
 	</resultMap>
 	
 	<sql id="selectRoleVo">
 	    select distinct r.role_id, r.role_name, r.role_key, r.role_sort, r.data_scope, r.menu_check_strictly, r.dept_check_strictly,
-            r.status, r.del_flag, r.create_time, r.remark 
+            r.status, r.del_flag, r.create_time, r.remark,
+            (select count(*) from sys_user_role members join sys_user member_user
+             on member_user.user_id = members.user_id and member_user.del_flag = '0'
+             where members.role_id = r.role_id) as member_count
         from sys_role r
 	        left join sys_user_role ur on ur.role_id = r.role_id
 	        left join sys_user u on u.user_id = ur.user_id
@@ -149,4 +153,4 @@ PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
         </foreach> 
  	</delete>
  	
-</mapper> 
+</mapper>

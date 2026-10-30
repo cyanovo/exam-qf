@@ -71,10 +71,12 @@ public class ExamAutoGradingService {
         if (question.getMaxScore() == null || question.getMaxScore() < 1) {
             throw new ServiceException("题目分值配置无效");
         }
+        var rules = ObjectiveGradingRules.parse(question);
         if (answer == null || answer.isBlank()) {
             return 0;
         }
         String type = question.getQuestionType();
+        if ("FILL_BLANK".equals(type)) return ObjectiveGradingRules.fill(question, answer, rules);
         if (!Set.of("SINGLE_CHOICE", "MULTI_CHOICE", "JUDGE").contains(type)) {
             return null;
         }
@@ -109,6 +111,10 @@ public class ExamAutoGradingService {
             throw new ServiceException("题目标准答案配置无效，需人工复核");
         }
         Set<String> actual = labels(answer);
+        if ("MULTI_CHOICE".equals(type) && "PARTIAL".equals(rules.getString("mode"))
+                && actual != null && !expected.equals(actual) && expected.containsAll(actual)) {
+            return rules.getInteger("partialScore");
+        }
         return expected.equals(actual) ? question.getMaxScore() : 0;
     }
 

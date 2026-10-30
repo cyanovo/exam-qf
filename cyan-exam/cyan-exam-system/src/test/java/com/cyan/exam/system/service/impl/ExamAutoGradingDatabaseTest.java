@@ -143,6 +143,20 @@ class ExamAutoGradingDatabaseTest {
         assertEquals(1, mapper.complete(id, "final", 10, "[]"));
         assertEquals("SUCCEEDED", mapper.latestFormal(900001L, 900002L, 1L).get("state"));
         assertEquals(0, mapper.retry(id));
+        assertEquals(1, mapper.archive(id, 1, 42L, "Verified regrade"));
+        assertEquals(1, mapper.regrade(id, 1));
+        assertEquals(0, mapper.regrade(id, 1));
+        assertEquals(0, mapper.complete(id, "final", 99, "[]"));
+        assertEquals(2, ((Number) mapper.get(id).get("runVersion")).intValue());
+        assertNull(mapper.get(id).get("score"));
+        assertEquals(10, ((Number) mapper.evaluations(id).get(0).get("score")).intValue());
+        assertEquals("Verified regrade", mapper.evaluations(id).get(0).get("reason"));
+        assertEquals(1, mapper.claim(id, "version-2"));
+        assertEquals(1, mapper.complete(id, "version-2", 7, "[]"));
+        assertEquals(10, ((Number) mapper.evaluations(id).get(0).get("score")).intValue());
+        assertEquals(1, sql.getMapper(ExamAnswerRecordMapper.class).clearCodeGrade(900001L, 900002L, 1L));
+        assertNull(sql.getMapper(ExamAnswerRecordMapper.class).selectByExamAndUser(900001L, 900002L)
+                .stream().filter(answer -> answer.getQuestionId() == 1L).findFirst().orElseThrow().getGradedAt());
         try (Statement statement = sql.getConnection().createStatement()) {
             statement.executeUpdate("UPDATE exam_info SET end_time=NOW()-INTERVAL 1 SECOND WHERE exam_id=900001");
         }

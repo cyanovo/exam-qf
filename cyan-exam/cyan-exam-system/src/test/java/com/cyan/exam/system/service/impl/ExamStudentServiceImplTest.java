@@ -37,6 +37,28 @@ class ExamStudentServiceImplTest {
     private static final long QUESTION_ID = 3L;
 
     @Test
+    void pythonIncludesCompleteStatementAndScoreButOnlyPublicSamples() {
+        CyanQuestion question = new CyanQuestion();
+        question.setQuestionId(QUESTION_ID);
+        question.setQuestionType("PYTHON");
+        question.setTitle("Sum");
+        question.setSubTitle("Read two integers.\nInput: a b\nOutput: their sum.");
+        question.setMaxScore(10);
+        question.setAnswer("{\"cases\":["
+                + "{\"input\":\"3 5\",\"expected\":\"8\",\"public\":true,\"weight\":0,\"comparison\":\"EXACT\"},"
+                + "{\"input\":\"SECRET\",\"expected\":\"HIDDEN\",\"public\":false,\"weight\":10,\"comparison\":\"EXACT\"}]}");
+        when(examQuestionMapper.selectSnapshots(EXAM_ID)).thenReturn(List.of(question));
+        when(answerRecordMapper.selectByExamAndUser(EXAM_ID, USER_ID)).thenReturn(List.of());
+        var item = service.getQuestionsWithAnswers(EXAM_ID, USER_ID).get(0);
+        assertEquals(question.getSubTitle(), item.get("description"));
+        assertEquals(10, item.get("maxScore"));
+        assertEquals(List.of(Map.of("input", "3 5", "expected", "8")), item.get("samples"));
+        assertFalse(item.containsKey("answer"));
+        assertFalse(item.toString().contains("SECRET"));
+        assertFalse(item.toString().contains("HIDDEN"));
+    }
+
+    @Test
     void optionsExposeOnlyPublicFields() {
         CyanQuestion question = new CyanQuestion();
         question.setQuestionId(QUESTION_ID);

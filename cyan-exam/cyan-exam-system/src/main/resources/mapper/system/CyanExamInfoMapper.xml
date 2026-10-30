@@ -12,6 +12,10 @@
         <result property="endTime"    column="end_time"    />
         <result property="status"     column="status"      />
         <result property="publishedAt" column="published_at" />
+        <result property="policyJson" column="policy_json" />
+        <result property="durationMinutes" column="duration_minutes" />
+        <result property="earlyEntryMinutes" column="early_entry_minutes" />
+        <result property="lifecycle" column="lifecycle" />
         <result property="createBy"   column="create_by"   />
         <result property="createTime" column="create_time" />
         <result property="updateBy"   column="update_by"   />
@@ -21,6 +25,7 @@
 
     <sql id="selectCyanExamInfoVo">
         select exam_id, owner_user_id, exam_name, start_time, end_time, status, published_at,
+               policy_json, duration_minutes, early_entry_minutes, lifecycle,
                create_by, create_time, update_by, update_time, remark
         from exam_info
     </sql>

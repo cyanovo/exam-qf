@@ -5,13 +5,13 @@
     <el-empty v-if="!loading && !failed && !exams.length" description="暂无已发布成绩" />
     <el-table v-else :data="exams" @row-click="show">
       <el-table-column prop="examName" label="考试" min-width="180" />
-      <el-table-column label="操作"><template #default="{ row }"><el-button link type="primary" @click.stop="show(row)">查看成绩</el-button></template></el-table-column>
+      <el-table-column label="操作" min-width="180"><template #default="{ row }"><el-button link type="primary" @click.stop="show(row)">查看成绩</el-button><el-button link type="primary" @click.stop="$router.push(`/exam/dossier/${row.examId}`)">材料与异常</el-button></template></el-table-column>
     </el-table>
     <section v-if="selected" class="detail">
       <h3>{{ selected.examName }}</h3>
-      <p>成绩版本 {{ selected.version }} · {{ selected.status === 'ABSENT' ? '缺考' : `总分 ${selected.total} · 名次 ${selected.rank}${selected.tied ? '（并列）' : ''}` }}</p>
-      <el-table :data="selected.scores">
-        <el-table-column prop="questionId" label="题目编号" />
+      <p>成绩版本 {{ selected.version }} · {{ selected.status === 'ABSENT' ? '缺考' : `总分 ${selected.total}` }}<span v-if="selected.rank != null"> · 名次 {{ selected.rank }}{{ selected.tied ? '（并列）' : '' }}</span></p>
+      <el-table v-if="selected.scores" :data="selected.scores">
+        <el-table-column label="题目"><template #default="{ row }">{{ row.title || row.questionId }}</template></el-table-column>
         <el-table-column prop="score" label="得分" />
         <el-table-column prop="maxScore" label="满分" />
       </el-table>

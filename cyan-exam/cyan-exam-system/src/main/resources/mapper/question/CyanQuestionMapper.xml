@@ -12,6 +12,10 @@
         <result property="title"         column="title"          />
         <result property="subTitle"      column="sub_title"      />
         <result property="answer"        column="answer"         />
+        <result property="gradingRules"  column="grading_rules"  />
+        <result property="initialCode"   column="initial_code"   />
+        <result property="reviewState" column="review_state" />
+        <result property="revision" column="revision" />
         <result property="createBy"      column="create_by"      />
         <result property="createTime"    column="create_time"    />
         <result property="updateBy"      column="update_by"      />
@@ -21,14 +25,17 @@
     </resultMap>
 
     <sql id="selectCyanQuestionVo">
-        select question_id, category, difficulty, question_type, title, sub_title, answer,
-               create_by, create_time, update_by, update_time, remark, status
+        select question_id, category, difficulty, question_type, title, sub_title, answer, grading_rules, initial_code,
+               create_by, create_time, update_by, update_time, remark, status, review_state, revision
         from cyan_question
     </sql>
 
     <select id="selectCyanQuestionList" parameterType="CyanQuestion" resultMap="CyanQuestionResult">
         <include refid="selectCyanQuestionVo"/>
         <where>
+            <if test="reviewState != null and reviewState != ''">
+                AND review_state = #{reviewState}
+            </if>
             <if test="category != null and category != ''">
                 AND category = #{category}
             </if>
@@ -51,6 +58,9 @@
         <include refid="selectCyanQuestionVo"/>
         where question_id = #{questionId}
     </select>
+    <select id="lockQuestion" resultMap="CyanQuestionResult">
+        <include refid="selectCyanQuestionVo"/> where question_id = #{questionId} FOR UPDATE
+    </select>
 
     <!-- 批量查询（新增） -->
     <select id="selectCyanQuestionByQuestionIds" parameterType="Long[]" resultMap="CyanQuestionResult">
@@ -64,24 +74,30 @@
     <insert id="insertCyanQuestion" parameterType="CyanQuestion" useGeneratedKeys="true" keyProperty="questionId">
         insert into cyan_question
         <trim prefix="(" suffix=")" suffixOverrides=",">
+            review_state, revision,
             <if test="category != null and category != ''">category,</if>
             <if test="difficulty != null">difficulty,</if>
             <if test="questionType != null and questionType != ''">question_type,</if>
             <if test="title != null and title != ''">title,</if>
             <if test="subTitle != null">sub_title,</if>
             <if test="answer != null">answer,</if>
+            <if test="gradingRules != null">grading_rules,</if>
+            <if test="initialCode != null">initial_code,</if>
             <if test="status != null and status != ''">status,</if>
             <if test="createBy != null">create_by,</if>
             <if test="createTime != null">create_time,</if>
             <if test="remark != null">remark,</if>
         </trim>
         <trim prefix="values (" suffix=")" suffixOverrides=",">
+            'DRAFT', 1,
             <if test="category != null and category != ''">#{category},</if>
             <if test="difficulty != null">#{difficulty},</if>
             <if test="questionType != null and questionType != ''">#{questionType},</if>
             <if test="title != null and title != ''">#{title},</if>
             <if test="subTitle != null">#{subTitle},</if>
             <if test="answer != null">#{answer},</if>
+            <if test="gradingRules != null">#{gradingRules},</if>
+            <if test="initialCode != null">#{initialCode},</if>
             <if test="status != null and status != ''">#{status},</if>
             <if test="createBy != null">#{createBy},</if>
             <if test="createTime != null">#{createTime},</if>
@@ -92,12 +108,15 @@
     <update id="updateCyanQuestion" parameterType="CyanQuestion">
         update cyan_question
         <trim prefix="SET" suffixOverrides=",">
+            review_state = 'DRAFT', revision = revision + 1,
             <if test="category != null and category != ''">category = #{category},</if>
             <if test="difficulty != null">difficulty = #{difficulty},</if>
             <if test="questionType != null and questionType != ''">question_type = #{questionType},</if>
             <if test="title != null and title != ''">title = #{title},</if>
             <if test="subTitle != null">sub_title = #{subTitle},</if>
             <if test="answer != null">answer = #{answer},</if>
+            <if test="gradingRules != null">grading_rules = #{gradingRules},</if>
+            <if test="initialCode != null">initial_code = #{initialCode},</if>
             <if test="status != null and status != ''">status = #{status},</if>
             <if test="updateBy != null">update_by = #{updateBy},</if>
             <if test="updateTime != null">update_time = #{updateTime},</if>

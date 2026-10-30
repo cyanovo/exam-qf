@@ -31,6 +31,8 @@ public class ExamStudentController extends BaseController {
 
     @Autowired
     private CyanExamInfoMapper examInfoMapper;
+    @Autowired
+    private com.cyan.exam.system.mapper.OnsiteMapper onsiteMapper;
 
     @PostMapping("/{examId}/session")
     public AjaxResult startSession(@PathVariable Long examId) {
@@ -91,8 +93,22 @@ public class ExamStudentController extends BaseController {
 
         Map<String, Object> result = new HashMap<>();
         result.put("examName", exam.getExamName());
-        result.put("endTime", exam.getEndTime());
+        result.put("endTime", com.cyan.exam.system.service.ExamPolicy.deadline(exam, session));
+        result.put("serverTime", new Date());
+        result.put("policy", com.cyan.exam.system.service.ExamPolicy.read(exam));
         result.put("questions", questionList);
+        result.put("onsiteTasks", onsiteMapper.tasks(examId).stream().filter(t -> !"DRAFT".equals(t.get("state"))).map(t -> {
+            Map<String,Object> safe=new HashMap<>();
+            for(String key:List.of("id","title","description","durationMinutes","maxScore","state")) safe.put(key,t.get(key));
+            Long taskId=((Number)t.get("id")).longValue();
+            String draft=onsiteMapper.codeDraft(taskId,userId);
+            var history=onsiteMapper.codeHistory(taskId,userId);
+            safe.put("userAnswer",draft!=null?draft:history.isEmpty()?"":history.get(0).get("source"));
+            safe.put("submissionId",history.isEmpty()?null:history.get(0).get("id"));
+            safe.put("submittedSource",history.isEmpty()?null:history.get(0).get("source"));
+            safe.put("codeLocked",onsiteMapper.scores(taskId).stream().anyMatch(s->userId.equals(((Number)s.get("userId")).longValue())));
+            return safe;
+        }).toList());
         return success(result);
     }
 

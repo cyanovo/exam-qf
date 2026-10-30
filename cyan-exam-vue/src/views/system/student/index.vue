@@ -115,7 +115,7 @@
       </el-form>
       <template #footer>
         <el-button @click="importOpen = false">取 消</el-button>
-        <el-button type="primary" @click="submitImport">开始创建</el-button>
+        <el-button type="primary" :loading="importLoading" @click="submitImport">开始创建</el-button>
       </template>
     </el-dialog>
   </div>
@@ -139,6 +139,7 @@ const multiple = ref(true)
 const total = ref(0)
 const title = ref("")
 const importOpen = ref(false)
+const importLoading = ref(false)
 
 const data = reactive({
   form: {},
@@ -264,11 +265,12 @@ function submitForm() {
 /** 删除 */
 function handleDelete(row) {
   const studentIds = row.studentId || ids.value
-  proxy.$modal.confirm('是否确认删除学号为"' + studentIds + '"的数据项？').then(function() {
+  const names = row.studentId ? row.studentNo : `选中的 ${ids.value.length} 名学生`
+  proxy.$modal.confirm(`确认删除${names}？账号将停用；无考试记录的学号会释放，有考试记录的保留用于成绩追溯。`).then(function() {
     return delStudent(studentIds)
   }).then(() => {
     getList()
-    proxy.$modal.msgSuccess("删除成功")
+    proxy.$modal.msgSuccess("删除成功，无考试记录的学号已释放；历史考试记录保留")
   }).catch(() => {})
 }
 
@@ -295,9 +297,11 @@ function handleImport() {
 
 /** 提交一键创建 */
 function submitImport() {
+  if (importLoading.value) return
   proxy.$refs["importRef"].validate(valid => {
-    if (valid) {
-      importStudents(importForm).then(res => {
+    if (valid && !importLoading.value) {
+      importLoading.value = true
+      importStudents({ ...importForm }).then(res => {
         if (res.code === 200) {
           proxy.$modal.msgSuccess(res.msg || "创建成功")
           importOpen.value = false
@@ -305,7 +309,7 @@ function submitImport() {
         } else {
           proxy.$modal.msgError(res.msg)
         }
-      })
+      }).finally(() => { importLoading.value = false })
     }
   })
 }

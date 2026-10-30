@@ -12,6 +12,9 @@ public interface ExamAnswerRecordMapper {
     int insertMissingSubmittedAnswers(@Param("examId") Long examId, @Param("userId") Long userId);
     ExamAnswerRecord lockByRecordId(Long recordId);
     int saveGrade(@Param("recordId") Long recordId, @Param("score") int score);
+    @org.apache.ibatis.annotations.Update("UPDATE exam_answer_record SET score=NULL,graded_at=NULL,update_time=NOW() "
+            + "WHERE exam_id=#{examId} AND user_id=#{userId} AND question_id=#{questionId}")
+    int clearCodeGrade(@Param("examId") Long examId, @Param("userId") Long userId, @Param("questionId") Long questionId);
     int insertScoreRevision(@Param("record") ExamAnswerRecord record, @Param("score") int score,
                             @Param("graderId") Long graderId, @Param("reason") String reason);
     List<java.util.Map<String, Object>> selectScoreRevisions(@Param("examId") Long examId,

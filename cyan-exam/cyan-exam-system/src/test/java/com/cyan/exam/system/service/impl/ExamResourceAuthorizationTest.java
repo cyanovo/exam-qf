@@ -35,6 +35,7 @@ class ExamResourceAuthorizationTest extends AuthenticatedExamTest {
     @Mock private ExamAnswerRecordMapper answerMapper;
     @Mock private SysUserMapper userMapper;
     @Mock private com.cyan.exam.system.service.ExamResultService resultService;
+    @Mock private com.cyan.exam.system.service.ExamManagementService configuration;
 
     private CyanExamInfo exam(Long owner) {
         CyanExamInfo exam = new CyanExamInfo();

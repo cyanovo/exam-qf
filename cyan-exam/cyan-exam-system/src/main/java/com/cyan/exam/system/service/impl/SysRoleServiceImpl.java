@@ -95,7 +95,7 @@ public class SysRoleServiceImpl implements ISysRoleService
         Set<String> permsSet = new HashSet<>();
         for (SysRole perm : perms)
         {
-            if (StringUtils.isNotNull(perm))
+            if (StringUtils.isNotNull(perm) && UserConstants.ROLE_NORMAL.equals(perm.getStatus()))
             {
                 permsSet.addAll(Arrays.asList(perm.getRoleKey().trim().split(",")));
             }
@@ -200,6 +200,10 @@ public class SysRoleServiceImpl implements ISysRoleService
         {
             for (Long roleId : roleIds)
             {
+                if (SysRole.isAdmin(roleId))
+                {
+                    throw new ServiceException("只有超级管理员可以操作内置管理员授权");
+                }
                 SysRole role = new SysRole();
                 role.setRoleId(roleId);
                 List<SysRole> roles = SpringUtils.getAopProxy(this).selectRoleList(role);

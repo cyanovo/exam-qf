@@ -13,6 +13,35 @@ class CodingRulesTest {
         assertThrows(ServiceException.class, () -> CodingRules.parse(CONFIG, 20));
         assertThrows(ServiceException.class, () -> CodingRules.parse(CONFIG.replace("\"weight\":0", "\"weight\":1"), 10));
     }
+    @Test void publicationRejectsConstantOutputAndDuplicateInputsButPreservesExistingSnapshots() {
+        String diverse = "{\"cases\":["
+                + "{\"input\":\"1\",\"expected\":\"2\",\"public\":true,\"weight\":0,\"comparison\":\"EXACT\"},"
+                + "{\"input\":\"2\",\"expected\":\"4\",\"public\":false,\"weight\":3,\"comparison\":\"EXACT\"},"
+                + "{\"input\":\"3\",\"expected\":\"6\",\"public\":false,\"weight\":3,\"comparison\":\"EXACT\"},"
+                + "{\"input\":\"4\",\"expected\":\"8\",\"public\":false,\"weight\":4,\"comparison\":\"EXACT\"}]}";
+        assertEquals(4, CodingRules.validateForPublication(diverse, 10).cases().size());
+        int constantScore = CodingRules.validateForPublication(diverse, 10).cases().stream()
+                .filter(c -> !c.publicCase() && CodingRules.matches(c, "4")).mapToInt(CodingRules.Case::weight).sum();
+        assertTrue(constantScore < 10);
+        assertTrue(assertThrows(ServiceException.class,
+                () -> CodingRules.validateForPublication(diverse.replace("\"expected\":\"6\"", "\"expected\":\"4\"")
+                        .replace("\"expected\":\"8\"", "\"expected\":\"4\""), 10)).getMessage().contains("3种"));
+        assertTrue(assertThrows(ServiceException.class,
+                () -> CodingRules.validateForPublication(diverse.replace("\"input\":\"3\"", "\"input\":\"2\""), 10))
+                .getMessage().contains("输入不能重复"));
+        assertEquals(2, CodingRules.parse(CONFIG, 10).cases().size());
+        assertThrows(ServiceException.class, () -> CodingRules.validateForPublication(CONFIG, 10));
+    }
+    @Test void publicationErrorsIdentifyMissingCasesAndScoreMismatch() {
+        assertTrue(assertThrows(ServiceException.class, () -> CodingRules.parse(
+                CONFIG.replace("\"public\":true", "\"public\":false").replace("\"weight\":0", "\"weight\":1"), 11))
+                .getMessage().contains("缺少公开样例"));
+        assertTrue(assertThrows(ServiceException.class, () -> CodingRules.parse(
+                CONFIG.replace("\"public\":false", "\"public\":true").replace("\"weight\":10", "\"weight\":0"), 10))
+                .getMessage().contains("缺少隐藏测试点"));
+        assertTrue(assertThrows(ServiceException.class, () -> CodingRules.parse(CONFIG, 20))
+                .getMessage().contains("10 分"));
+    }
     @Test void exactOnlyNormalizesWindowsNewlines() {
         var c = new CodingRules.Case("", "hi\n", 10, false, "EXACT", null);
         assertTrue(CodingRules.matches(c, "hi\r\n"));

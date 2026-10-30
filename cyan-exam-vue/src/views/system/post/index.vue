@@ -1,26 +1,26 @@
 <template>
    <div class="app-container">
       <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch">
-         <el-form-item label="岗位编码" prop="postCode">
+         <el-form-item label="考务岗位编码" prop="postCode">
             <el-input
                v-model="queryParams.postCode"
-               placeholder="请输入岗位编码"
+               placeholder="请输入考务岗位编码"
                clearable
                style="width: 200px"
                @keyup.enter="handleQuery"
             />
          </el-form-item>
-         <el-form-item label="岗位名称" prop="postName">
+         <el-form-item label="考务岗位名称" prop="postName">
             <el-input
                v-model="queryParams.postName"
-               placeholder="请输入岗位名称"
+               placeholder="请输入考务岗位名称"
                clearable
                style="width: 200px"
                @keyup.enter="handleQuery"
             />
          </el-form-item>
          <el-form-item label="状态" prop="status">
-            <el-select v-model="queryParams.status" placeholder="岗位状态" clearable style="width: 200px">
+            <el-select v-model="queryParams.status" placeholder="考务岗位状态" clearable style="width: 200px">
                <el-option
                   v-for="dict in sys_normal_disable"
                   :key="dict.value"
@@ -79,10 +79,10 @@
 
       <el-table v-loading="loading" :data="postList" @selection-change="handleSelectionChange">
          <el-table-column type="selection" width="55" align="center" />
-         <el-table-column label="岗位编号" align="center" prop="postId" />
-         <el-table-column label="岗位编码" align="center" prop="postCode" />
-         <el-table-column label="岗位名称" align="center" prop="postName" />
-         <el-table-column label="岗位排序" align="center" prop="postSort" />
+         <el-table-column label="考务岗位编号" align="center" prop="postId" />
+         <el-table-column label="考务岗位编码" align="center" prop="postCode" />
+         <el-table-column label="考务岗位名称" align="center" prop="postName" />
+         <el-table-column label="考务岗位排序" align="center" prop="postSort" />
          <el-table-column label="状态" align="center" prop="status">
             <template #default="scope">
                <dict-tag :options="sys_normal_disable" :value="scope.row.status" />
@@ -109,19 +109,19 @@
          @pagination="getList"
       />
 
-      <!-- 添加或修改岗位对话框 -->
+      <!-- 添加或修改考务岗位对话框 -->
       <el-dialog :title="title" v-model="open" width="500px" append-to-body>
-         <el-form ref="postRef" :model="form" :rules="rules" label-width="80px">
-            <el-form-item label="岗位名称" prop="postName">
-               <el-input v-model="form.postName" placeholder="请输入岗位名称" />
+         <el-form ref="postRef" :model="form" :rules="rules" label-width="100px">
+            <el-form-item label="考务岗位名称" prop="postName">
+               <el-input v-model="form.postName" placeholder="请输入考务岗位名称" />
             </el-form-item>
-            <el-form-item label="岗位编码" prop="postCode">
+            <el-form-item label="考务岗位编码" prop="postCode">
                <el-input v-model="form.postCode" placeholder="请输入编码名称" />
             </el-form-item>
-            <el-form-item label="岗位顺序" prop="postSort">
+            <el-form-item label="考务岗位顺序" prop="postSort">
                <el-input-number v-model="form.postSort" controls-position="right" :min="0" />
             </el-form-item>
-            <el-form-item label="岗位状态" prop="status">
+            <el-form-item label="考务岗位状态" prop="status">
                <el-radio-group v-model="form.status">
                   <el-radio
                      v-for="dict in sys_normal_disable"
@@ -170,15 +170,15 @@ const data = reactive({
     status: undefined
   },
   rules: {
-    postName: [{ required: true, message: "岗位名称不能为空", trigger: "blur" }],
-    postCode: [{ required: true, message: "岗位编码不能为空", trigger: "blur" }],
-    postSort: [{ required: true, message: "岗位顺序不能为空", trigger: "blur" }],
+    postName: [{ required: true, message: "考务岗位名称不能为空", trigger: "blur" }],
+    postCode: [{ required: true, message: "考务岗位编码不能为空", trigger: "blur" }],
+    postSort: [{ required: true, message: "考务岗位顺序不能为空", trigger: "blur" }],
   }
 })
 
 const { queryParams, form, rules } = toRefs(data)
 
-/** 查询岗位列表 */
+/** 查询考务岗位列表 */
 function getList() {
   loading.value = true
   listPost(queryParams.value).then(response => {
@@ -230,7 +230,7 @@ function handleSelectionChange(selection) {
 function handleAdd() {
   reset()
   open.value = true
-  title.value = "添加岗位"
+  title.value = "添加考务岗位"
 }
 
 /** 修改按钮操作 */
@@ -240,7 +240,7 @@ function handleUpdate(row) {
   getPost(postId).then(response => {
     form.value = response.data
     open.value = true
-    title.value = "修改岗位"
+    title.value = "修改考务岗位"
   })
 }
 
@@ -268,7 +268,7 @@ function submitForm() {
 /** 删除按钮操作 */
 function handleDelete(row) {
   const postIds = row.postId || ids.value
-  proxy.$modal.confirm('是否确认删除岗位编号为"' + postIds + '"的数据项？').then(function() {
+  proxy.$modal.confirm('是否确认删除考务岗位编号为"' + postIds + '"的数据项？').then(function() {
     return delPost(postIds)
   }).then(() => {
     getList()

@@ -60,4 +60,19 @@ class CodeJudgeWorkerTest {
         assertThrows(IllegalStateException.class, () -> worker.process(3L, "lease"));
         verifyNoInteractions(runner);
     }
+
+    @Test void synchronousFormalFeedbackDoesNotRetainHiddenOutput() throws Exception {
+        setup("FORMAL");
+        when(runner.synchronous()).thenReturn(true);
+        when(runner.run(anyString(), eq("secret"))).thenReturn(JSON.parseObject(
+                "{\"status\":{\"id\":3},\"stdout\":\"b2s=\",\"stderr\":\"c2VjcmV0\",\"verdict\":\"Accepted\"}"));
+        worker.process(3L, "lease");
+        var progress = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(mapper).progress(eq(3L), eq("lease"), progress.capture());
+        var point = JSON.parseObject(progress.getValue()).getJSONArray("feedback").getJSONObject(0);
+        assertEquals(10, point.getIntValue("score"));
+        assertFalse(point.containsKey("stdout"));
+        assertFalse(point.containsKey("stderr"));
+        assertFalse(progress.getValue().contains("secret"));
+    }
 }

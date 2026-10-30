@@ -18,16 +18,22 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="参考答案" min-width="150" prop="referenceAnswer" />
+      <el-table-column label="参考答案" min-width="150">
+        <template #default="{ row }">
+          <span v-if="row.type === 'PYTHON'">按考试快照中的测试点计分</span>
+          <span v-else>{{ row.referenceAnswer }}</span>
+        </template>
+      </el-table-column>
       <el-table-column label="学生答案" min-width="150">
         <template #default="{ row }">
           <pre v-if="row.type === 'PYTHON'" class="code-answer">{{ row.studentAnswer || '未正式提交' }}</pre>
           <span v-else>{{ row.studentAnswer || "未作答" }}</span>
           <div v-if="row.type === 'PYTHON'">
             {{ evaluationLabel(row.evaluationState) }}
-            <el-button v-if="row.evaluationState === 'FAILED' && !resultsLocked"
+            <el-button v-if="['FAILED', 'SUCCEEDED'].includes(row.evaluationState) && !resultsLocked"
               v-hasPermi="['exam:grading:edit']" icon="RefreshRight" link
-              :loading="retrying === row.formalSubmissionId" @click="retryEvaluation(row)">重试评测</el-button>
+              :loading="retrying === row.formalSubmissionId" @click="retryEvaluation(row)">重新评测</el-button>
+            <el-button icon="Clock" link @click="showEvaluations(row)">评测记录</el-button>
           </div>
         </template>
       </el-table-column>
@@ -63,6 +69,49 @@
         <el-table-column prop="changedAt" label="时间" width="180" />
       </el-table>
     </section>
+    <el-dialog v-model="historyOpen" title="评测版本与逐点结果" width="850px" class="evaluation-dialog">
+      <el-button icon="Refresh" :loading="historyLoading" @click="showEvaluations(historyQuestion)">刷新记录</el-button>
+      <el-table :data="evaluationHistory" row-key="id" v-loading="historyLoading">
+        <el-table-column type="expand">
+          <template #default="{ row }">
+            <div class="evaluation-content">
+              <pre class="code-answer">{{ row.source }}</pre>
+              <h4>当前版本 v{{ row.runVersion }} · {{ row.snapshotHash?.slice(0, 12) }}</h4>
+              <el-table :data="parseFeedback(row.feedback)" size="small">
+                <el-table-column prop="case" label="测试点" />
+                <el-table-column label="结果"><template #default="{ row: point }">{{ point.passed ? '通过' : '未通过' }}</template></el-table-column>
+                <el-table-column prop="verdict" label="运行状态" />
+                <el-table-column prop="score" label="得分" />
+                <el-table-column prop="weight" label="满分" />
+                <el-table-column prop="runtime" label="运行环境" min-width="180" />
+              </el-table>
+              <h4>历史版本</h4>
+              <el-table :data="row.evaluations || []" size="small">
+                <el-table-column type="expand"><template #default="{ row: old }">
+                  <pre class="code-answer">{{ JSON.stringify(parseFeedback(old.feedback), null, 2) }}</pre>
+                </template></el-table-column>
+                <el-table-column prop="runVersion" label="版本" width="70" />
+                <el-table-column label="状态"><template #default="{ row: old }">{{ evaluationLabel(old.state) }}</template></el-table-column>
+                <el-table-column prop="score" label="得分" width="70" />
+                <el-table-column prop="reason" label="重评原因" min-width="160" />
+                <el-table-column prop="actorId" label="操作人" />
+                <el-table-column prop="archivedAt" label="归档时间" min-width="150" />
+              </el-table>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="id" label="提交编号" width="100" />
+        <el-table-column label="类型"><template #default="{ row }">{{ row.mode === 'FORMAL' ? '正式提交' : '样例' }}</template></el-table-column>
+        <el-table-column prop="runVersion" label="版本" width="70" />
+        <el-table-column label="状态"><template #default="{ row }">{{ evaluationLabel(row.state) }}</template></el-table-column>
+        <el-table-column prop="score" label="评测得分" />
+        <el-table-column label="操作"><template #default="{ row }">
+          <el-button v-if="!resultsLocked && ['FAILED', 'SUCCEEDED'].includes(row.state)" v-hasPermi="['exam:grading:edit']"
+            link icon="RefreshRight" :loading="retrying === row.id"
+            @click="retryEvaluation({ ...row, formalSubmissionId: row.id })">重评</el-button>
+        </template></el-table-column>
+      </el-table>
+    </el-dialog>
   </div>
 </template>
 
@@ -73,8 +122,10 @@ import request from '@/utils/request'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const route = useRoute()
-const examId = Number(route.params.examId)
-const userId = Number(route.params.userId)
+const props = defineProps({ examId: Number, userId: Number })
+const emit = defineEmits(['saved'])
+const examId = props.examId || Number(route.params.examId)
+const userId = props.userId || Number(route.params.userId)
 const examName = ref('')
 const studentName = ref('')
 const sessionStatus = ref('NOT_STARTED')
@@ -85,6 +136,18 @@ const reason = ref('')
 const loading = ref(false)
 const saving = ref(false)
 const retrying = ref(null)
+const historyOpen = ref(false), historyLoading = ref(false), evaluationHistory = ref([])
+let historyQuestion
+function parseFeedback(value) { try { return JSON.parse(value || '[]') } catch { return [] } }
+async function showEvaluations(row) {
+  historyQuestion = row
+  historyOpen.value = true
+  historyLoading.value = true
+  try {
+    const { data } = await request.get(`/exam/code/${examId}/student/${userId}/history/${row.questionId}`)
+    evaluationHistory.value = data || []
+  } finally { historyLoading.value = false }
+}
 const canGrade = computed(() => !resultsLocked.value && ['SUBMITTED', 'AUTO_SUBMITTED', 'GRADED'].includes(sessionStatus.value))
 const statusLabel = computed(() => ({
   NOT_STARTED: '未开始', IN_PROGRESS: '答题中', SUBMITTED: '已交卷',
@@ -93,6 +156,9 @@ const statusLabel = computed(() => ({
 const gradableCount = computed(() => questions.value.filter(q => q.type !== 'PYTHON' && q.recordId != null && q.tempScore != null).length)
 const hasCorrections = computed(() => questions.value.some(q =>
   q.recordId != null && q.score != null && q.tempScore != null && q.tempScore !== q.score))
+const hasUnsavedChanges = computed(() => !loading.value && questions.value.some(q =>
+  q.type !== 'PYTHON' && q.recordId != null && q.tempScore !== (q.score ?? undefined)))
+defineExpose({ hasUnsavedChanges, saving })
 const totalScore = computed(() => questions.value.reduce((sum, q) => sum + (q.recordId ? (q.tempScore ?? 0) : 0), 0))
 const totalMaxScore = computed(() => questions.value.reduce((sum, q) => sum + (q.maxScore || 0), 0))
 const typeLabel = type => ({
@@ -101,18 +167,23 @@ const typeLabel = type => ({
 })[type] || type
 const evaluationLabel = state => ({
   NOT_SUBMITTED: '未正式提交', QUEUED: '排队中', RUNNING: '评测中',
-  SUCCEEDED: '评测完成', FAILED: '系统评测失败'
+  RETRY: '系统重试中', SUCCEEDED: '评测完成', FAILED: '系统评测失败'
 })[state] || state
 
 async function retryEvaluation(row) {
+  let reason
   try {
-    await ElMessageBox.confirm('重新评测该次正式提交？代码和题目版本保持不变。', '重试评测')
+    const response = await ElMessageBox.prompt(`提交 ${row.formalSubmissionId}，当前评测 v${row.runVersion}。`, '重评原因', {
+      inputType: 'textarea', inputValidator: value => !!value?.trim() && value.trim().length <= 500 || '请输入1至500字的原因'
+    })
+    reason = response.value
   } catch { return }
   retrying.value = row.formalSubmissionId
   try {
-    await request.post(`/exam/code/submission/${row.formalSubmissionId}/retry`)
+    await request.post(`/exam/code/submission/${row.formalSubmissionId}/regrade`, { version: row.runVersion, reason })
     ElMessage.success('已重新加入评测队列')
     fetchDetail()
+    if (historyOpen.value) showEvaluations(historyQuestion)
   } finally { retrying.value = null }
 }
 
@@ -138,6 +209,7 @@ function submitScores() {
   saving.value = true
   request.post('/exam/grading/submitScore', { examId, userId, scores, reason: reason.value }).then(() => {
     ElMessage.success('批改已保存')
+    emit('saved')
     fetchDetail()
   }).finally(() => { saving.value = false })
 }
@@ -158,5 +230,7 @@ onMounted(fetchDetail)
 .reason-input { max-width: 440px; }
 .revision-history { margin-top: 28px; }
 .revision-history h3 { font-size: 16px; }
+.evaluation-content { padding: 12px; min-width: 0; }
+:global(.evaluation-dialog) { max-width: calc(100vw - 24px); }
 @media (max-width: 700px) { .actions { flex-wrap: wrap; } .reason-input { max-width: 100%; } }
 </style>

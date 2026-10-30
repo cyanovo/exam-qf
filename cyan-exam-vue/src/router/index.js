@@ -4,6 +4,29 @@ import Layout from '@/layout'
 // 公共路由
 export const constantRoutes = [
   {
+    path: '/exam/manage',
+    component: Layout,
+    hidden: true,
+    children: [{path: ':examId', component: () => import('@/views/exam/manage/index.vue'), meta: {title:'考试编排与场次'}}]
+  },
+  {path:'/exam/dossier/:examId', component:()=>import('@/views/exam/dossier/index.vue'), hidden:true, meta:{title:'异常与材料'}},
+  {
+    path: '/change-password',
+    component: () => import('@/views/change-password.vue'),
+    hidden: true,
+    meta: { title: '首次登录修改密码' }
+  },
+  {
+    path: '/exam/onsite',
+    component: Layout,
+    children: [{
+      path: '',
+      name: 'ExamOnsite',
+      component: () => import('@/views/exam/onsite/index.vue'),
+      meta: { title: '机器人实操评分', icon: 'edit' }
+    }]
+  },
+  {
     path: '/exam/results',
     component: () => import('@/views/exam/results/index.vue'),
     hidden: true,
@@ -50,10 +73,17 @@ export const constantRoutes = [
     meta: { title: '批改管理', icon: 'edit' },
     children: [
       {
+        path: 'workspace/:examId',
+        component: () => import('@/views/exam/grading/workspace.vue'),
+        name: 'ExamGradingWorkspace',
+        meta: { title: '评分与成绩' },
+        hidden: true
+      },
+      {
         path: 'results/:examId',
-        component: () => import('@/views/exam/grading/results.vue'),
+        component: () => import('@/views/exam/grading/workspace.vue'),
         name: 'ExamResultsReview',
-        meta: { title: '成绩复核与发布' },
+        meta: { title: '评分与成绩' },
         hidden: true
       },
       {
@@ -64,9 +94,9 @@ export const constantRoutes = [
       },
       {
         path: 'students/:examId',
-        component: () => import('@/views/exam/grading/studentList.vue'),
+        component: () => import('@/views/exam/grading/workspace.vue'),
         name: 'ExamGradingStudents',
-        meta: { title: '考生列表' },
+        meta: { title: '评分与成绩' },
         hidden: true
       },
       {

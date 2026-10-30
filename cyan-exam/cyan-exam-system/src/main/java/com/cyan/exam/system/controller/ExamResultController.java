@@ -27,6 +27,9 @@ public class ExamResultController {
     @GetMapping("/{examId}")
     @PreAuthorize("@ss.hasAnyPermi('exam:grading:list,exam:results:review')")
     public AjaxResult detail(@PathVariable Long examId) { return AjaxResult.success(service.detail(examId)); }
+    @GetMapping("/{examId}/history")
+    @PreAuthorize("@ss.hasAnyPermi('exam:grading:list,exam:results:review')")
+    public AjaxResult history(@PathVariable Long examId) { return AjaxResult.success(service.history(examId)); }
 
     @PostMapping("/{examId}/reviewers")
     @PreAuthorize("@ss.hasPermi('exam:results:assign')")
@@ -71,19 +74,28 @@ public class ExamResultController {
             throw new com.cyan.exam.common.exception.ServiceException("只能导出复核通过的锁定成绩");
         }
         var snapshot = JSON.parseObject(JSON.toJSONString(detail.get("snapshot")));
-        StringBuilder csv = new StringBuilder("\uFEFFexamId,examName,version,userId,name,questionId,score,maxScore,total,rank,tied,status\r\n");
+        boolean identity = com.cyan.exam.common.utils.SecurityUtils.hasPermi("exam:results:exportIdentity");
+        StringBuilder csv = new StringBuilder("\uFEFFexamId,examName,version,candidateRef,");
+        if (identity) csv.append("name,");
+        csv.append("questionId,score,maxScore,total,rank,tied,status,kind,taskId,title\r\n");
+        int candidate = 0;
         for (Object value : snapshot.getJSONArray("rows")) {
+            candidate++;
             var row = (com.alibaba.fastjson.JSONObject) value;
             var scores = row.getJSONArray("scores");
             if (scores.isEmpty()) scores.add(new com.alibaba.fastjson.JSONObject());
             for (Object scoreValue : scores) {
                 var score = (com.alibaba.fastjson.JSONObject) scoreValue;
-                Object[] cells = {examId, snapshot.get("examName"), detail.get("version"), row.get("userId"),
-                    row.get("studentName"), score.get("questionId"), score.get("score"), score.get("maxScore"),
-                    row.get("total"), row.get("rank"), row.get("tied"), row.get("status")};
-                for (int i = 0; i < cells.length; i++) {
+                java.util.List<Object> cells = new java.util.ArrayList<>();
+                java.util.Collections.addAll(cells,examId,snapshot.get("examName"),detail.get("version"),
+                    identity ? row.get("userId") : "C"+candidate);
+                if (identity) cells.add(row.get("studentName"));
+                java.util.Collections.addAll(cells, score.get("questionId"), score.get("score"), score.get("maxScore"),
+                    row.get("total"), row.get("rank"), row.get("tied"), row.get("status"),
+                    score.getOrDefault("kind", "THEORY"), score.get("taskId"), score.get("title"));
+                for (int i = 0; i < cells.size(); i++) {
                     if (i > 0) csv.append(',');
-                    csv.append(csvCell(cells[i]));
+                    csv.append(csvCell(cells.get(i)));
                 }
                 csv.append("\r\n");
             }

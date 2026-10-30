@@ -49,23 +49,35 @@ public class CodeJudgeWorker {
         }
         CodingRules.Case test = cases.get(index);
         String token = progress.getString("token");
-        if (token == null) {
+        JSONObject result = null;
+        if (runner.synchronous()) {
+            result = runner.run((String) row.get("source"), test.input());
+        } else if (token == null) {
             progress.put("token", runner.submit((String) row.get("source"), test.input()));
             progress.put("started", System.currentTimeMillis());
         } else {
             if (System.currentTimeMillis() - progress.getLongValue("started") > 120000) throw new IllegalStateException("Runner timeout");
-            JSONObject result = runner.poll(token);
+            result = runner.poll(token);
+        }
+        if (result != null) {
             int status = result.getJSONObject("status").getIntValue("id");
             if (status >= 3) {
                 if (status == 13 || status == 14 || status > 14) throw new IllegalStateException("Runner internal error");
                 String output = Judge0Client.decode(result.getString("stdout"));
                 boolean passed = status == 3 && CodingRules.matches(test, output);
                 if (passed) score += test.weight();
+                Map<String, Object> point = new LinkedHashMap<>();
+                point.put("case", index + 1); point.put("passed", passed); point.put("status", status);
+                point.put("weight", test.weight()); point.put("score", passed ? test.weight() : 0);
+                point.put("verdict", result.getString("verdict") != null ? result.getString("verdict")
+                        : status == 3 ? "Accepted" : status == 5 ? "Time Limit Exceeded" : "Runtime/Compilation Error");
+                point.put("time", result.get("time")); point.put("memory", result.get("memory"));
+                point.put("runtime", runner.runtimeIdentity());
                 if (sample) {
-                    feedback.add(Map.of("case", index + 1, "passed", passed, "stdout", output,
-                            "stderr", Judge0Client.decode(result.getString("stderr")),
-                            "compileOutput", Judge0Client.decode(result.getString("compile_output")), "status", status));
+                    point.put("stdout", output); point.put("stderr", Judge0Client.decode(result.getString("stderr")));
+                    point.put("compileOutput", Judge0Client.decode(result.getString("compile_output")));
                 }
+                feedback.add(point);
                 progress.put("index", index + 1); progress.put("score", score);
                 progress.put("feedback", feedback); progress.remove("token");
             }

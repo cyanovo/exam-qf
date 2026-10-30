@@ -19,11 +19,14 @@ public class CodeSubmissionService {
     private final Judge0Client runner;
     private final ExamAccessScope scope;
     private final ExamResultService results;
+    private final ExamAnswerRecordMapper answers;
 
     public CodeSubmissionService(CodeSubmissionMapper submissions, CyanExamInfoMapper exams, ExamStudentMapper students,
-            ExamSessionMapper sessions, ExamQuestionMapper questions, Judge0Client runner, ExamAccessScope scope, ExamResultService results) {
+            ExamSessionMapper sessions, ExamQuestionMapper questions, Judge0Client runner, ExamAccessScope scope,
+            ExamResultService results, ExamAnswerRecordMapper answers) {
         this.submissions = submissions; this.exams = exams; this.students = students; this.sessions = sessions;
         this.questions = questions; this.runner = runner; this.scope = scope; this.results = results;
+        this.answers = answers;
     }
     public record Request(Long questionId, String mode, String source, String key, String snapshotHash, String sourceHash) {}
 
@@ -53,7 +56,7 @@ public class CodeSubmissionService {
         if (session == null || !"IN_PROGRESS".equals(session.getStatus()) || exam == null
                 || !"0".equals(exam.getStatus()) || exam.getPublishedAt() == null
                 || exam.getStartTime() == null || exam.getEndTime() == null
-                || now.before(exam.getStartTime()) || !now.before(exam.getEndTime())) throw new ServiceException("考试未开始或已截止");
+                || now.before(exam.getStartTime()) || !now.before(ExamPolicy.deadline(exam, session))) throw new ServiceException("考试未开始或已截止");
         CyanQuestion question = question(examId, request.questionId());
         CodingRules.parse(question.getAnswer(), question.getMaxScore());
         String snapshotHash = CodingRules.hash(question.getAnswer());
@@ -89,14 +92,54 @@ public class CodeSubmissionService {
         Long examId = ((Number) row.get("examId")).longValue();
         scope.requireAccess(exams.selectCyanExamInfoByExamId(examId));
         results.lockForGrading(examId);
-        if (submissions.retry(id) != 1) throw new ServiceException("只有系统失败任务允许重试");
+        if (!"FAILED".equals(row.get("state"))) throw new ServiceException("只有系统失败任务允许重试");
+        regrade(id, ((Number) row.get("runVersion")).intValue(), "系统异常重试");
+    }
+
+    @Transactional
+    public void regrade(Long id, int version, String reason) {
+        if (reason == null || reason.isBlank() || reason.trim().length() > 500)
+            throw new ServiceException("必须填写不超过500字的重评原因");
+        Map<String, Object> row = submissions.get(id);
+        if (row == null) throw new ServiceException("提交不存在");
+        Long examId = ((Number) row.get("examId")).longValue();
+        Long userId = ((Number) row.get("userId")).longValue();
+        Long questionId = ((Number) row.get("questionId")).longValue();
+        scope.requireAccess(exams.selectCyanExamInfoByExamId(examId));
+        results.lockForGrading(examId);
+        sessions.lockByExamAndUser(examId, userId);
+        row = submissions.lock(id);
+        if (((Number) row.get("runVersion")).intValue() != version
+                || !Set.of("FAILED", "SUCCEEDED").contains(row.get("state")))
+            throw new ServiceException("评测版本已变化或任务正在运行，请刷新后重试");
+        runner.requireConfigured();
+        if (submissions.queueSize() >= 2000) throw new ServiceException("评测队列繁忙");
+        if (submissions.archive(id, version, scope.actorId(), reason.trim()) != 1
+                || submissions.regrade(id, version) != 1) throw new ServiceException("重评入队失败");
+        Map<String, Object> latest = submissions.latestFormal(examId, userId, questionId);
+        // Re-evaluating an earlier submission must never change the selected final submission.
+        if ("FORMAL".equals(row.get("mode")) && latest != null
+                && id.equals(((Number) latest.get("id")).longValue()))
+            answers.clearCodeGrade(examId, userId, questionId);
+    }
+
+    public List<Map<String, Object>> teacherHistory(Long examId, Long userId, Long questionId) {
+        scope.requireAccess(exams.selectCyanExamInfoByExamId(examId));
+        List<Map<String, Object>> history = submissions.history(examId, userId, questionId);
+        for (Map<String, Object> row : history) {
+            row.remove("progress");
+            row.put("evaluations", submissions.evaluations(((Number) row.get("id")).longValue()));
+        }
+        return history;
     }
 
     private Map<String, Object> safe(Map<String, Object> row) {
         Map<String, Object> output = new LinkedHashMap<>();
-        for (String key : List.of("id", "questionId", "mode", "state", "sourceHash", "snapshotHash", "receivedAt")) output.put(key, row.get(key));
+        for (String key : List.of("id", "questionId", "mode", "state", "sourceHash", "snapshotHash", "receivedAt", "runVersion")) output.put(key, row.get(key));
         // Formal diagnostics can echo hidden inputs. Only sample output is ever returned to students.
         if ("SAMPLE".equals(row.get("mode")) && row.get("feedback") != null) output.put("feedback", JSON.parse((String) row.get("feedback")));
+        if ("FORMAL".equals(row.get("mode")) && "SUCCEEDED".equals(row.get("state")))
+            output.put("score", row.get("score"));
         return output;
     }
 }

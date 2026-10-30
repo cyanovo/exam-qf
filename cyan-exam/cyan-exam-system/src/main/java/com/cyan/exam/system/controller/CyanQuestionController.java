@@ -33,6 +33,29 @@ public class CyanQuestionController extends BaseController {
 
     @Autowired
     private ICyanQuestionService cyanQuestionService;
+    @Autowired
+    private com.cyan.exam.system.service.QuestionReviewService reviewService;
+
+    @GetMapping("/{id}/history")
+    @PreAuthorize("@ss.hasPermi('question:question:query')")
+    public AjaxResult history(@PathVariable Long id) { return success(reviewService.history(id)); }
+
+    @PostMapping("/{id}/workflow")
+    @PreAuthorize("@ss.hasPermi('question:question:edit')")
+    @Log(title = "题目流转", businessType = BusinessType.UPDATE)
+    public AjaxResult workflow(@PathVariable Long id, @RequestBody com.cyan.exam.system.service.QuestionReviewService.Decision input) {
+        if (input.action()==null || !java.util.Set.of("SUBMIT","WITHDRAW","DISABLE","REOPEN").contains(input.action()))
+            return AjaxResult.error("审核通过或退回请使用审核入口");
+        reviewService.decide(id,input); return success();
+    }
+
+    @PostMapping("/{id}/review")
+    @PreAuthorize("@ss.hasPermi('question:question:review')")
+    @Log(title = "题目审核", businessType = BusinessType.UPDATE)
+    public AjaxResult review(@PathVariable Long id, @RequestBody com.cyan.exam.system.service.QuestionReviewService.Decision input) {
+        if (input.action()==null || !java.util.Set.of("APPROVE","REJECT").contains(input.action())) return AjaxResult.error("无效审核操作");
+        reviewService.decide(id,input); return success();
+    }
 
     @GetMapping("/list")
     @PreAuthorize("@ss.hasPermi('question:question:list')")

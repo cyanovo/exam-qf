@@ -22,7 +22,12 @@ class ExamResultServiceTest {
     @Mock ExamAnswerRecordMapper answers;
     @Mock SysUserMapper users;
     @Mock ExamAccessScope scope;
+    @Mock OnsiteMapper onsite;
     @InjectMocks ExamResultService service;
+
+    @org.junit.jupiter.api.BeforeEach void injectOnsite() {
+        org.springframework.test.util.ReflectionTestUtils.setField(service, "onsite", onsite);
+    }
 
     Map<String, Object> version(String state) {
         return new HashMap<>(Map.of("id", 10L, "version", 1, "state", state, "requestedBy", 9L));
@@ -38,6 +43,19 @@ class ExamResultServiceTest {
             when(results.latest(1L)).thenReturn(version(state));
             assertNotNull(service.lockForGrading(1L));
         }
+    }
+
+    @Test void terminatedExamDoesNotWaitForRoundedEndTime() {
+        var exam = new CyanExamInfo();
+        exam.setPublishedAt(new Date());
+        exam.setEndTime(new Date(System.currentTimeMillis() + 60000));
+        exam.setLifecycle("TERMINATED");
+        when(exams.lockByExamId(1L)).thenReturn(exam);
+        when(results.latest(1L)).thenReturn(null);
+        // Reaching reviewer validation proves termination takes precedence over the clock.
+        var error = assertThrows(ServiceException.class, () -> service.requestReview(1L, "terminated"));
+        assertEquals("请先绑定复核员", error.getMessage());
+        verify(results).reviewers(1L);
     }
 
     @Test void competitionRankingPreservesTiesAndExcludesAbsentees() {
@@ -64,6 +82,20 @@ class ExamResultServiceTest {
         when(results.hasGraded(1L, 8L)).thenReturn(1);
         assertThrows(ServiceException.class, () -> service.transition(1L, "approve", "checked"));
         verify(results, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test void superAdminCanReviewOwnResultsWithAuditedReasonButCannotSkipStages() {
+        when(exams.lockByExamId(1L)).thenReturn(new CyanExamInfo());
+        when(scope.actorId()).thenReturn(1L);
+        var own = version("REVIEW");
+        own.put("requestedBy", 1L);
+        when(results.latest(1L)).thenReturn(own);
+        when(results.transition(10L, "REVIEW", "APPROVED", 1L)).thenReturn(1);
+        service.transition(1L, "approve", "已核对原始评分");
+        verify(results).event(10L, 1L, "REVIEW", "APPROVED", "[超级管理员复核] 已核对原始评分");
+        verify(results, never()).isReviewer(anyLong(), anyLong());
+        assertThrows(ServiceException.class, () -> service.transition(1L, "release", "未通过不能发布"));
+        assertThrows(ServiceException.class, () -> service.transition(1L, "approve", " "));
     }
 
     @Test void releaseRequiresApprovedStateAndBoundReviewer() {
@@ -127,5 +159,39 @@ class ExamResultServiceTest {
         when(results.latest(1L)).thenReturn(new HashMap<>());
         assertThrows(ServiceException.class, () -> service.lockForGrading(1L));
         assertTrue(service.isLocked(1L));
+    }
+
+    @Test void onsiteJudgeCannotReviewOwnScores() {
+        when(exams.lockByExamId(1L)).thenReturn(new CyanExamInfo());
+        when(results.latest(1L)).thenReturn(version("REVIEW"));
+        when(scope.actorId()).thenReturn(8L);
+        when(results.isReviewer(1L, 8L)).thenReturn(1);
+        when(onsite.hasGraded(1L, 8L)).thenReturn(1);
+        assertThrows(ServiceException.class, () -> service.transition(1L, "approve", "checked"));
+        verify(results, never()).transition(any(), any(), any(), any());
+    }
+
+    @Test void onsiteScoresAreIncludedInImmutableResultSnapshot() {
+        var exam = new CyanExamInfo(); exam.setPublishedAt(new Date(0)); exam.setEndTime(new Date(0));
+        exam.setExamName("combined");
+        when(exams.lockByExamId(1L)).thenReturn(exam);
+        when(results.reviewers(1L)).thenReturn(List.of(Map.of("userId", 8L)));
+        var q = new CyanQuestion(); q.setQuestionId(3L); q.setMaxScore(10);
+        when(questions.selectSnapshots(1L)).thenReturn(List.of(q));
+        when(onsite.tasks(1L)).thenReturn(List.of(Map.of("id", 4L, "state", "LOCKED", "maxScore", 20, "title", "robot")));
+        when(onsite.scores(4L)).thenReturn(List.of(Map.of("userId", 2L, "total", 15, "state", "SUBMITTED")));
+        when(students.selectUserIdsByExamId(1L)).thenReturn(List.of(2L));
+        var session = new ExamSession(); session.setStatus("SUBMITTED");
+        when(sessions.lockByExamAndUser(1L, 2L)).thenReturn(session);
+        var answer = new ExamAnswerRecord(); answer.setQuestionId(3L); answer.setScore(8); answer.setGradedAt(new Date());
+        when(answers.selectByExamAndUser(1L, 2L)).thenReturn(List.of(answer));
+        when(results.latest(1L)).thenReturn(null, null, Map.of("id", 1L));
+        service.requestReview(1L, "done");
+        ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
+        verify(results).insert(captor.capture());
+        var payload = JSON.parseObject((String) captor.getValue().get("payload"));
+        assertEquals(30, payload.getIntValue("maxScore"));
+        assertEquals(23, payload.getJSONArray("rows").getJSONObject(0).getIntValue("total"));
+        assertEquals("ONSITE", payload.getJSONArray("rows").getJSONObject(0).getJSONArray("scores").getJSONObject(1).getString("kind"));
     }
 }
