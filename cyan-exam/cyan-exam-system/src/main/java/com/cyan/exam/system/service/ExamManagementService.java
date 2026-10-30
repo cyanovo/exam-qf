@@ -129,9 +129,8 @@ public class ExamManagementService {
                 "questions", questions.selectAssignedQuestions(id), "tasks", onsite.tasks(id), "history", mapper.history(id));
     }
     public static void editable(CyanExamInfo e) {
-        if (!"ACTIVE".equals(e.getLifecycle()) || e.getPublishedAt()!=null
-                || e.getStartTime()==null || !e.getStartTime().after(new Date()))
-            throw new ServiceException("只有未发布且尚未开始的考试可以修改");
+        if (!"ACTIVE".equals(e.getLifecycle()) || e.getPublishedAt()!=null)
+            throw new ServiceException("只有未发布且未终止、未归档的考试可以修改");
     }
     public void recordPublication(CyanExamInfo exam) {
         mapper.event(exam.getExamId(),scope.actorId(),"PUBLISH","统一发布考试",

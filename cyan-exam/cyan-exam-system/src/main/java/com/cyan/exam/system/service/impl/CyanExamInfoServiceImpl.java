@@ -48,10 +48,7 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
         CyanExamInfo exam = cyanExamInfoMapper.lockByExamId(examId);
         accessScope.requireAccess(exam);
         if (!"ACTIVE".equals(exam.getLifecycle())) throw new ServiceException("场次已终止或归档");
-        if (exam.getPublishedAt() != null || exam.getStartTime() != null
-                && !new Date().before(exam.getStartTime())) {
-            throw new ServiceException("考试已发布或已开始，不能修改");
-        }
+        if (exam.getPublishedAt() != null) throw new ServiceException("考试已发布，不能修改；未开考且无作答时可先撤回");
         return exam;
     }
 
@@ -59,11 +56,10 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     @Transactional
     public void publish(Long examId) {
         CyanExamInfo exam = lockEditable(examId);
-        Date now = new Date();
         if (!"0".equals(exam.getStatus()) || exam.getStartTime() == null
                 || exam.getEndTime() == null || !exam.getEndTime().after(exam.getStartTime())
-                || !exam.getStartTime().after(now)) {
-            throw new ServiceException("请设置有效的未来考试时间并启用考试");
+                || !exam.getEndTime().after(new Date())) {
+            throw new ServiceException("请启用考试，并设置尚未结束的考试时间");
         }
         List<CyanQuestion> assigned = examQuestionMapper.selectAssignedQuestions(examId);
         var tasks = onsiteMapper.tasks(examId);
@@ -149,6 +145,7 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     @Override
     @Transactional
     public int insertCyanExamInfo(CyanExamInfo examInfo) {
+        validateSchedule(examInfo);
         examInfo.setOwnerUserId(accessScope.actorId());
         examInfo.setCreateBy(SecurityUtils.getUsername());
         examInfo.setCreateTime(new Date());
@@ -166,6 +163,7 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
     @Transactional
     public int updateCyanExamInfo(CyanExamInfo examInfo) {
         CyanExamInfo stored = lockEditable(examInfo.getExamId());
+        validateSchedule(examInfo);
         examInfo.setOwnerUserId(stored.getOwnerUserId());
         examInfo.setUpdateBy(SecurityUtils.getUsername());
         examInfo.setUpdateTime(new Date());
@@ -178,6 +176,12 @@ public class CyanExamInfoServiceImpl implements ICyanExamInfoService {
             replaceQuestions(examInfo.getExamId(), Arrays.asList(examInfo.getQuestionIds()));
         }
         return rows;
+    }
+
+    private void validateSchedule(CyanExamInfo exam) {
+        if (exam.getStartTime() == null || exam.getEndTime() == null
+                || !exam.getEndTime().after(exam.getStartTime()))
+            throw new ServiceException("请设置有效的开始和结束时间，结束时间须晚于开始时间");
     }
 
     @Override

@@ -4,7 +4,7 @@ import path from 'node:path'
 
 const root=fs.realpathSync(process.argv[2])
 const port=Number(process.env.EXAM_WEB_PORT || 5190)
-const api=new URL(process.env.EXAM_API_TARGET || 'http://127.0.0.1:8190')
+const api=new URL(process.env.EXAM_API_TARGET || 'http://127.0.0.1:9010')
 const release=process.env.EXAM_RELEASE || 'unknown'
 const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg','.ico':'image/x-icon','.woff2':'font/woff2','.ttf':'font/ttf'}
 const server=http.createServer((req,res) => {

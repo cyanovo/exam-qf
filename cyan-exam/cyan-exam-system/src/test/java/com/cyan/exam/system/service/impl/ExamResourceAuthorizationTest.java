@@ -42,6 +42,7 @@ class ExamResourceAuthorizationTest extends AuthenticatedExamTest {
         exam.setExamId(5L);
         exam.setOwnerUserId(owner);
         exam.setStartTime(new Date(System.currentTimeMillis() + 600_000));
+        exam.setEndTime(new Date(exam.getStartTime().getTime() + 3_600_000));
         return exam;
     }
 

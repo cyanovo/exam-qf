@@ -1,7 +1,7 @@
 param(
     [string]$Java = 'D:/java/jdk25/bin/java.exe',
     [string]$RuntimeRoot = 'D:/app/cyan-exam',
-    [int]$Port = 8181,
+    [int]$Port = 9010,
     [int]$RedisDatabase = 3,
     [string]$JarPath = ''
 )

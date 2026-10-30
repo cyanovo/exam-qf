@@ -13,7 +13,7 @@
   "RedisDatabase": 6,
   "RedisPassword": "",
   "RedisExecutable": "Redis-x64-5.0.14.1/redis-server.exe",
-  "ApiPort": 8190,
+  "ApiPort": 9010,
   "WebPort": 5190,
   "Profile": "D:/app/cyan-exam/python-demo-uploads",
   "JudgeUrl": "http://127.0.0.1:15050",

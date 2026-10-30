@@ -7,7 +7,7 @@ ruoyi:
   captchaType: math
 server:
   address: 127.0.0.1
-  port: ${SERVER_PORT}
+  port: ${SERVER_PORT:9010}
   servlet:
     context-path: /
 spring:

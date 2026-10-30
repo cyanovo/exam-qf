@@ -6,7 +6,7 @@
           <li>新增考试，设置名称和起止时间。</li>
           <li>在该行分配学生、选择题目；机器人实操题、评分步骤和章节顺序在“编排与场次”设置。</li>
           <li>确认名单和题目后发布，学生才能进入考试。发布后需要修改，请在开考前进入“编排与场次”撤回发布。</li>
-          <li>不需要的草稿可直接删除，过期草稿也可以。已发布但未开考的考试，点击删除后会自动撤回，无需另填原因。</li>
+          <li>未发布的考试可随时修改起止时间、名单和题目；发布时结束时间尚未到即可，开始时间设为过去可立即入场。不需要的草稿可直接删除。</li>
           <li>已结束且全员无实际作答的白卷考试可直接删除，不用先评分。已有实际答案、代码、人工评分、复核或材料记录的考试需保留并归档。</li>
         </ol>
       </el-collapse-item>
@@ -95,7 +95,7 @@
         </template>
       </el-table-column>
       <el-table-column label="发布" align="center" width="110">
-        <template #default="{ row }">{{ row.lifecycle==='ARCHIVED' ? '已归档' : row.lifecycle==='TERMINATED' ? '已终止' : row.publishedAt ? "已发布" : canEdit(row) ? "草稿" : '草稿已过期' }}</template>
+        <template #default="{ row }">{{ row.lifecycle==='ARCHIVED' ? '已归档' : row.lifecycle==='TERMINATED' ? '已终止' : row.publishedAt ? "已发布" : '草稿' }}</template>
       </el-table-column>
       <el-table-column label="备注" align="center" prop="remark" show-overflow-tooltip />
       <el-table-column label="操作" align="center" width="430">
@@ -217,11 +217,6 @@
     <el-dialog title="选择题目" v-model="questionOpen" width="min(900px, 96vw)" append-to-body :before-close="closeQuestionDialog" :close-on-click-modal="!questionSaving">
       <!-- 题目筛选区域 -->
       <el-form :model="questionQuery" :inline="true" label-width="68px" @submit.prevent>
-        <el-form-item label="题目分类">
-          <el-select v-model="questionQuery.category" placeholder="请选择" clearable>
-            <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="难易程度">
           <el-select v-model="questionQuery.difficulty" placeholder="请选择" clearable>
             <el-option v-for="i in 5" :key="i" :label="i + '星'" :value="i" />
@@ -300,10 +295,10 @@ const ids = ref([])
 const single = ref(true)
 const multiple = ref(true)
 const total = ref(0)
-const canEdit = row => (!row.lifecycle || row.lifecycle==='ACTIVE') && !row.publishedAt && row.startTime && new Date(row.startTime.replace(' ', 'T')).getTime() > Date.now()
+const canEdit = row => (!row.lifecycle || row.lifecycle==='ACTIVE') && !row.publishedAt
 const selectedRows = computed(() => examList.value.filter(row => ids.value.includes(row.examId)))
 const editableSelection = computed(() => selectedRows.value.length === 1 && canEdit(selectedRows.value[0]))
-const selectionHint = computed(()=> selectedRows.value.length!==1 ? '请先勾选一场考试，或使用该行的操作按钮' : editableSelection.value ? '操作已选考试' : selectedRows.value[0].publishedAt ? '已发布考试不能修改名单或题目；开考前可到编排与场次撤回发布' : '场次已过期、终止或归档，不能修改')
+const selectionHint = computed(()=> selectedRows.value.length!==1 ? '请先勾选一场考试，或使用该行的操作按钮' : editableSelection.value ? '操作已选考试' : selectedRows.value[0].publishedAt ? '已发布考试不能修改名单或题目；开考前可到编排与场次撤回发布' : '场次已终止或归档，不能修改')
 const deleteHint = computed(()=>!selectedRows.value.length ? '勾选考试后批量删除，也可直接点击该行的删除' : '查看待删除考试；不能删除的场次会单独列出并保留')
 const deleteOpen = ref(false)
 const deleteCandidates = ref([])
@@ -346,19 +341,11 @@ const activeQuestionIds = computed({
 
 // 题目筛选条件
 const questionQuery = reactive({
-  category: undefined,
   difficulty: undefined,
   questionType: undefined
 })
 
 // 题库分类、题型常量（与题库管理页面一致）
-const categoryOptions = [
-  { label: "Java", value: "JAVA" },
-  { label: "Python", value: "PYTHON" },
-  { label: "C语言", value: "C" },
-  { label: "HTML", value: "HTML" }
-]
-
 const typeOptions = [
   { label: "单选题", value: "SINGLE_CHOICE" },
   { label: "多选题", value: "MULTI_CHOICE" },
@@ -382,7 +369,11 @@ const data = reactive({
   rules: {
     examName: [{ required: true, message: "考试名称不能为空", trigger: "blur" }],
     startTime: [{ required: true, message: "开始时间不能为空", trigger: "blur" }],
-    endTime: [{ required: true, message: "结束时间不能为空", trigger: "blur" }]
+    endTime: [
+      { required: true, message: "结束时间不能为空", trigger: "change" },
+      { validator: (_, value, done) => !form.value.startTime || !value || value > form.value.startTime
+        ? done() : done(new Error("结束时间须晚于开始时间")), trigger: "change" }
+    ]
   }
 })
 
@@ -394,7 +385,7 @@ function loadQuestionList() {
       ...q, questionId: `ROBOT-${q.questionId}`, questionType: 'ROBOT_PRACTICAL'
     }))]
     allQuestionList.value = options.filter(q=>activeQuestionIds.value.includes(q.questionId) || (
-      (!questionQuery.category || q.category===questionQuery.category) &&
+      q.category === 'PYTHON' &&
       (!questionQuery.difficulty || q.difficulty===questionQuery.difficulty) &&
       (!questionQuery.questionType || q.questionType===questionQuery.questionType)
     )).map(q => ({
@@ -597,7 +588,6 @@ async function handleSelectQuestion(row) {
   if (!assignmentExamId.value) return
   // 重置筛选条件
   Object.assign(questionQuery, {
-    category: undefined,
     difficulty: undefined,
     questionType: undefined
   })
@@ -607,7 +597,7 @@ async function handleSelectQuestion(row) {
     request.get(`/exam/manage/${assignmentExamId.value}/robot-questions`),
     request.get(`/exam/onsite/${assignmentExamId.value}`)
   ])
-  questionOptions.value=options.data
+  questionOptions.value=(options.data || []).filter(q => q.category === 'PYTHON' || assigned.data?.includes(q.questionId))
   robotQuestions.value=robots.data || []
   assignedRobotTasks.value=onsite.data.tasks || []
   selectedRobotQuestionIds.value=[]

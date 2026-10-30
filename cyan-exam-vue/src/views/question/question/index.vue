@@ -3,11 +3,6 @@
     <!-- 搜索区域 -->
     <div class="search-bar">
       <el-form :model="queryParams" ref="queryRef" :inline="true" v-show="showSearch" label-width="68px">
-        <el-form-item label="题目分类" prop="category">
-          <el-select v-model="queryParams.category" placeholder="请选择" clearable>
-            <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="难易程度" prop="difficulty">
           <el-select v-model="queryParams.difficulty" placeholder="请选择" clearable>
             <el-option v-for="i in 5" :key="i" :label="i + '星'" :value="i" />
@@ -119,9 +114,7 @@
         <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="题目分类" prop="category">
-              <el-select v-model="form.category" placeholder="请选择" style="width:100%">
-                <el-option v-for="item in categoryOptions" :key="item.value" :label="item.label" :value="item.value" />
-              </el-select>
+              <el-input :model-value="form.category === 'PYTHON' ? 'Python' : form.category" disabled />
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -216,11 +209,7 @@
               type="textarea" 
               :rows="8" 
               placeholder="请将您的试题粘贴到这里，例如：
-    1. Java 语言的特点有哪些？（单选题）
-    A. 面向对象  B. 跨平台  C. 编译型  D. 以上都对
-    答案：D
-
-    2. Python 中用于定义函数的关键字是？（填空题）
+    1. Python 中用于定义函数的关键字是？（填空题）
     答案：def"
               class="limited-textarea"
             />
@@ -334,7 +323,7 @@ const generatedJson = ref('')
 const data = reactive({
   form: {
     questionId: null,
-    category: "",
+    category: "PYTHON",
     difficulty: 1,
     questionType: "SINGLE_CHOICE",
     title: "",
@@ -347,7 +336,7 @@ const data = reactive({
   queryParams: {
     pageNum: 1,
     pageSize: 10,
-    category: undefined,
+    category: "PYTHON",
     difficulty: undefined,
     questionType: undefined,
     reviewState: undefined
@@ -370,13 +359,6 @@ const data = reactive({
 })
 
 const { queryParams, form, rules } = toRefs(data)
-
-const categoryOptions = [
-  { label: "Java", value: "JAVA" },
-  { label: "Python", value: "PYTHON" },
-  { label: "C语言", value: "C" },
-  { label: "HTML", value: "HTML" }
-]
 
 const typeOptions = [
   { label: "单选题", value: "SINGLE_CHOICE" },
@@ -487,7 +469,7 @@ function reset() {
   readOnly.value = false
   form.value = {
     questionId: null,
-    category: "",
+    category: "PYTHON",
     difficulty: 1,
     questionType: "SINGLE_CHOICE",
     title: "",
@@ -510,6 +492,7 @@ function handleQuery() {
 
 function resetQuery() {
   proxy.resetForm("queryRef")
+  queryParams.value.category = "PYTHON"
   handleQuery()
 }
 
@@ -692,7 +675,7 @@ async function generateQuestionsByAI() {
     const systemPrompt = `你是一个专业的题库转换助手。请将用户提供的试题内容转换为 JSON 数组格式。
 要求：
 1. 每个题目一个对象，包含字段：
-   - category: 题目分类，根据内容推测（JAVA/PYTHON/C/HTML）
+   - category: 固定为 PYTHON
    - difficulty: 难易程度 (1-5整数，默认3)
    - questionType: 题目类型 (SINGLE_CHOICE/MULTI_CHOICE/JUDGE/FILL_BLANK/SHORT_ANSWER)
    - title: 题干内容
@@ -701,15 +684,15 @@ async function generateQuestionsByAI() {
 2. 直接输出 JSON 数组，不要包含 markdown 标记或任何说明文字示例：
 [
   {
-    "category": "JAVA",
+    "category": "PYTHON",
     "difficulty": 3,
     "questionType": "SINGLE_CHOICE",
-    "title": "Java 属于什么类型的语言？",
-    "subTitle": "A: 编译型语言; B: 解释型语言; C: 编译与解释结合; D: 以上都对 | C",
-    "answer": "C"
+    "title": "Python 中用于定义函数的关键字是？",
+    "subTitle": "A: class; B: def; C: import; D: return | B",
+    "answer": "B"
   }
 ]。
-3. 如果用户没有指定题目分类，智能推测。
+3. 所有题目均属于 Python 分类。
 4. 尽量保持选项顺序与原文一致。
 5. json数组中每一个字段都要有值。
 6. 选择题和判断题的选项是写在副题干的，这个一定要有`

@@ -87,7 +87,7 @@ const taskSource=ref('bank'), bankQuestionId=ref(null), robotQuestions=ref([])
 const form=ref({durationMinutes:0,earlyEntryMinutes:30,policy:{instructions:'',tieRule:'SHARED',releasePolicy:'DETAIL',retentionDays:365,entries:[]}})
 const task=ref({title:'',description:'',durationMinutes:10,items:[{title:'',maxScore:10}]})
 const states={DRAFT:'未发布',PUBLISHED:'已发布',READY:'等待入场',RUNNING:'进行中',CLOSED:'已结束',TERMINATED:'已终止',ARCHIVED:'已归档'}
-const editable=computed(()=>data.value.state==='DRAFT' && new Date(data.value.exam?.startTime?.replace(' ','T')).getTime()>Date.now())
+const editable=computed(()=>data.value.state==='DRAFT')
 async function load() {
   busy.value=true
   try {

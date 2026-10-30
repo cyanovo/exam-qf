@@ -63,6 +63,43 @@ class CyanExamInfoServiceImplTest extends AuthenticatedExamTest {
     }
 
     @Test
+    void publishesExamThatStartedTenMinutesAgo() {
+        CyanExamInfo exam = futureExam();
+        exam.setStartTime(new Date(System.currentTimeMillis() - 600_000));
+        CyanQuestion question = new CyanQuestion();
+        question.setQuestionId(3L);
+        question.setStatus("0");
+        question.setReviewState("PUBLISHED");
+        question.setTitle("Python basics");
+        question.setQuestionType("FILL_BLANK");
+        question.setAnswer("def");
+        CyanQuestion assignment = new CyanQuestion();
+        assignment.setQuestionId(3L);
+        assignment.setMaxScore(10);
+        when(infoMapper.lockByExamId(1L)).thenReturn(exam);
+        when(examQuestionMapper.selectAssignedQuestions(1L)).thenReturn(List.of(assignment));
+        when(questionMapper.selectCyanQuestionByQuestionIds(new Long[]{3L})).thenReturn(List.of(question));
+        when(studentMapper.selectUserIdsByExamId(1L)).thenReturn(List.of(2L));
+        when(infoMapper.publish(1L)).thenReturn(1);
+        service.publish(1L);
+        verify(infoMapper).publish(1L);
+    }
+
+    @Test
+    void expiredUnpublishedExamCanBeRescheduled() {
+        CyanExamInfo exam = futureExam();
+        exam.setLifecycle("ACTIVE");
+        exam.setStartTime(new Date(System.currentTimeMillis() - 1_200_000));
+        exam.setEndTime(new Date(System.currentTimeMillis() - 600_000));
+        when(infoMapper.lockByExamId(1L)).thenReturn(exam);
+        CyanExamInfo update = futureExam();
+        update.setExamId(1L);
+        update.setStartTime(new Date(System.currentTimeMillis() - 600_000));
+        service.updateCyanExamInfo(update);
+        verify(infoMapper).updateCyanExamInfo(update);
+    }
+
+    @Test
     void rejectsIncompleteQuestionAndDoesNotPublish() {
         when(infoMapper.lockByExamId(1L)).thenReturn(futureExam());
         when(studentMapper.selectUserIdsByExamId(1L)).thenReturn(List.of(2L));

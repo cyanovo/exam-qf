@@ -11,7 +11,7 @@ if not exist "node_modules\vite\bin\vite.js" (
   echo Vite dependencies are missing.
   goto failed
 )
-set "EXAM_API_TARGET=http://127.0.0.1:8182"
+set "EXAM_API_TARGET=http://127.0.0.1:9010"
 set "BROWSER=none"
 echo Starting exam frontend...
 echo Open http://127.0.0.1:5178 after Vite reports ready.

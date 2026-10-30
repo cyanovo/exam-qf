@@ -13,7 +13,7 @@ for (const scenario of ['draft', 'published', 'mixed', 'protected', 'withdraw-fa
     const browser = await chromium.launch({ headless: true, channel: 'msedge' })
     t.after(() => browser.close())
     const context = await browser.newContext({ viewport: { width: 1440, height: 960 } })
-    await context.addCookies([{ name: 'Exam-Token-127-0-0-1-8182', value: 'delete-test', url: base }])
+    await context.addCookies([{ name: 'Exam-Token-127-0-0-1-9010', value: 'delete-test', url: base }])
     const page = await context.newPage()
     const writes = [], errors = []
     page.on('pageerror', error => errors.push(error.message))
@@ -30,7 +30,8 @@ for (const scenario of ['draft', 'published', 'mixed', 'protected', 'withdraw-fa
       const req = route.request()
       const path = new URL(req.url()).pathname.replace('/dev-api', '')
       let response = { code: 200, data: [] }
-      if (path === '/getInfo') response = {
+      if (path === '/captchaImage') response = { code: 200, captchaEnabled: false }
+      else if (path === '/getInfo') response = {
         code: 200, user: { userId: 9, userName: 'delete-test' }, roles: ['teacher'],
         permissions: scenario === 'remove-only' ? ['exam:exam:remove', 'exam:exam:list'] : ['*:*:*']
       }
@@ -59,6 +60,13 @@ for (const scenario of ['draft', 'published', 'mixed', 'protected', 'withdraw-fa
     })
     await page.goto(`${base}/exam-management`)
     await page.getByText('Expired draft', { exact: true }).waitFor()
+    const expiredDraft = page.locator('.el-table__body tr').filter({ hasText: 'Expired draft' })
+    if (scenario !== 'ended-blank') {
+      await expiredDraft.getByText('草稿', { exact: true }).waitFor()
+      if (scenario !== 'remove-only') {
+        assert.equal(await expiredDraft.getByRole('button', { name: '修改' }).isEnabled(), true)
+      }
+    }
     await page.getByText('操作指引：准备考试、发布与删除', { exact: true }).click()
     await page.getByText('新增考试，设置名称和起止时间。', { exact: true }).waitFor()
     if (scenario === 'mixed') {
